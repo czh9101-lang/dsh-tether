@@ -347,6 +347,16 @@ function apply(ctx, config = {}) {
  */
 function injectNarrowScreenCss(html) {
   const css = `
+/* 侧栏底部的 sidebar.footer.action 是横排 flex 行,官方设想里放并排的小动作。
+   「连接手机」照抄「设置」的类,是占满一行的触发行;别的插件(dsh-cost-meter)
+   又往同一行放 width:100% 的面板,横排下两者互挤:本按钮被压到只剩图标,
+   rail 态更被顶出 56px 的侧栏。改成纵向堆叠,各占一行;独占时与横排等价。
+   rail 态容器宽随内容,居中才与「设置」图标对齐。 */
+[class*="footArea"] > [class*="footerActions"] {
+  flex-direction: column !important;
+  align-items: stretch !important;
+}
+[class*="collapsed"] [class*="footArea"] > [class*="footerActions"] { align-items: center !important; }
 @media (max-width: 640px) {
   /* hero 背后的装饰性发光椭圆比视口宽,会让整页能被横向拖动 */
   html, body { overflow-x: hidden; }
@@ -652,7 +662,13 @@ function injectNarrowScreenCss(html) {
     if (!slot || slot.querySelector('[data-dsh-tether="hosts-trigger"]')) return
     var settings = document.querySelector('[data-slot="settings.trigger"]')
     var reference = settings && settings.closest ? settings.closest('button') : null
-    if (!reference) return
+    if (!reference || !reference.parentElement) return
+    // 「设置」是 triggerRow(定高的横排容器)套 trigger(flex:1 1 0%)两层。只抄
+    // 里层放进纵向堆叠的插槽,basis 0% 会变成高度,按钮塌成一行字;两层都抄,
+    // 几何才在宽态 / rail 态都与「设置」一致。
+    var row = document.createElement('div')
+    row.setAttribute('data-dsh-tether', 'hosts-row')
+    row.className = reference.parentElement.className
     var button = document.createElement('button')
     button.type = 'button'
     button.setAttribute('data-dsh-tether', 'hosts-trigger')
@@ -665,10 +681,13 @@ function injectNarrowScreenCss(html) {
       if (framed) window.parent.postMessage({ type: 'dsh-tether:open-hosts' }, '*')
       else showPairing()
     })
-    slot.append(button)
-    // 侧栏展开/收起时「设置」按钮会换类名(rail 与否),跟着同步
-    new MutationObserver(function () { button.className = reference.className })
-      .observe(reference, { attributes: true, attributeFilter: ['class'] })
+    row.append(button)
+    slot.append(row)
+    // 侧栏展开/收起时「设置」两层都会换类名(rail 与否),跟着同步
+    new MutationObserver(function () {
+      button.className = reference.className
+      row.className = reference.parentElement.className
+    }).observe(reference.parentElement, { attributes: true, attributeFilter: ['class'], subtree: true })
   }
   mountHostsTrigger()
   new MutationObserver(mountHostsTrigger).observe(document.documentElement, { childList: true, subtree: true })
