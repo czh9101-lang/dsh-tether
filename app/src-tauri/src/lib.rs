@@ -164,7 +164,7 @@ async fn run_connection_inner(
     *state.outgoing.lock().await = Some(tx);
 
     // 本地代理:每条入站 TCP 对应一条 iroh 代理流,WebView 由此拿到主机的完整
-    // dsh web UI。端口交给 OS 分配,避免与手机上其它应用抢固定端口。
+    // dsh web UI。端口按主机派生,同一台主机每次都是同一个源(见 proxy_port_for)。
     match start_proxy(app.clone(), conn.clone()).await {
         Ok(port) => {
             *state.proxy_port.lock().await = Some(port);
@@ -203,12 +203,28 @@ async fn run_connection_inner(
     Ok(())
 }
 
-/// 起本地 TCP 监听,每条连接开一条 iroh 代理流转发;返回 OS 分配的端口。
+/// 本地代理端口按主机 ID 派生:dsh 的 web UI 把「当前会话」等状态按源存在
+/// localStorage 里,端口每次随机就是每次新源、存储为空,页面只能走「连最近
+/// 工作区、没有空白会话就新建」那条路——配上一进会话就写入历史的预设
+/// (如 Prefab Anchored Standard),每开一次 App 就多一条会话。
+/// 不同主机派生出不同端口,各自的存储互不串。范围避开 Android(32768 起)与
+/// iOS(49152 起)的临时端口区,降低被出站连接占走的概率。
+fn proxy_port_for(peer: &EndpointId) -> u16 {
+    let b = peer.as_bytes();
+    20000 + u16::from_be_bytes([b[0], b[1]]) % 12000
+}
+
+/// 起本地 TCP 监听,每条连接开一条 iroh 代理流转发;返回实际端口。
+/// 派生端口被占时退回 OS 分配:这一次不记状态,连接本身不受影响。
 /// 监听任务随连接生命周期结束:连接断开后 open_bi 失败,浏览器侧表现为加载失败。
 async fn start_proxy(app: AppHandle, conn: iroh::endpoint::Connection) -> Result<u16> {
-    let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-        .await
-        .context("本地代理监听失败")?;
+    let preferred = proxy_port_for(&conn.remote_id());
+    let listener = match tokio::net::TcpListener::bind(("127.0.0.1", preferred)).await {
+        Ok(listener) => listener,
+        Err(_) => tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .context("本地代理监听失败")?,
+    };
     let port = listener.local_addr()?.port();
     tauri::async_runtime::spawn(async move {
         let _keep_app_alive = app;

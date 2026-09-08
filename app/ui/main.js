@@ -30,7 +30,9 @@ let webUiOrigin = null
 function showWebUi(url) {
   const frame = el('webui')
   webUiOrigin = new URL(url).origin
-  if (frame.src !== url) frame.src = url
+  // 每次连上都重载:端口按主机派生后 URL 前后一致,而上一条连接的代理监听
+  // 已随连接一起结束,旧页面里的 WebSocket 是死的,不重载就停在那儿。
+  frame.src = url
   for (const v of Object.values(views)) v.classList.add('hidden')
   frame.classList.remove('hidden')
   setSlim(true)
