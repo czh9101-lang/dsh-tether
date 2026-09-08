@@ -210,11 +210,40 @@ fn emit(msg: &PluginOut) {
     println!("{}", serde_json::to_string(msg).expect("PluginOut 可序列化"));
 }
 
+/// Termux 里没有 JVM:iroh 默认解析器在 android 目标上经 JNI 读系统 DNS,
+/// ndk-context 未初始化即 panic。iroh 用 catch_unwind 接住后回退 Google DNS,
+/// 但默认 panic hook 已先把整段栈打到 stderr,看着像启动失败。这里直接给出
+/// 与那条回退等价的解析器,根本不进 JNI。
+#[cfg(target_os = "android")]
+fn android_dns_resolver() -> iroh::dns::DnsResolver {
+    use iroh::dns::DnsProtocol;
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
+    const GOOGLE: [IpAddr; 4] = [
+        IpAddr::V4(Ipv4Addr::new(8, 8, 8, 8)),
+        IpAddr::V4(Ipv4Addr::new(8, 8, 4, 4)),
+        IpAddr::V6(Ipv6Addr::new(0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8888)),
+        IpAddr::V6(Ipv6Addr::new(0x2001, 0x4860, 0x4860, 0, 0, 0, 0, 0x8844)),
+    ];
+    iroh::dns::DnsResolver::builder()
+        .with_nameservers(GOOGLE.into_iter().flat_map(|ip| {
+            let addr = SocketAddr::new(ip, 53);
+            [(addr, DnsProtocol::Udp), (addr, DnsProtocol::Tcp)]
+        }))
+        .build()
+}
+
+fn endpoint_builder() -> iroh::endpoint::Builder {
+    let builder = Endpoint::builder(presets::N0);
+    #[cfg(target_os = "android")]
+    let builder = builder.dns_resolver(android_dns_resolver());
+    builder
+}
+
 async fn host_main(data_dir: PathBuf, force_pair: bool, proxy_target: Option<std::net::SocketAddr>) -> Result<()> {
     let secret = load_or_create_secret(&data_dir.join("identity.key"))?;
     let store_path = data_dir.join("paired.json");
     let store = load_store(&store_path);
-    let ep = Endpoint::builder(presets::N0)
+    let ep = endpoint_builder()
         .secret_key(secret)
         .alpns(vec![ALPN.to_vec()])
         .bind()
@@ -635,7 +664,7 @@ async fn phone_sim_main(
 ) -> Result<()> {
     let peer: EndpointId = peer.trim().parse().map_err(|e| anyhow::anyhow!("无效的 --peer 设备 ID: {e}"))?;
     let secret = load_or_create_secret(&data_dir.join("identity.key"))?;
-    let ep = Endpoint::builder(presets::N0).secret_key(secret).bind().await?;
+    let ep = endpoint_builder().secret_key(secret).bind().await?;
     eprintln!("[phone-sim] 本机 ID: {}", ep.id());
     let conn = ep.connect(peer, ALPN).await.context("连接 host 失败")?;
     let (mut send, mut recv) = conn.open_bi().await.context("打开控制流失败")?;
