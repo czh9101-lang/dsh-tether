@@ -2,6 +2,14 @@
 
 本文件记录面向用户的变化。每个版本的这一节会原样作为该版本 Release 的说明。
 
+## 0.1.12
+
+### 修复
+
+- **Termux:`tether-host` 启动时打一段 `android context was not initialized` 的 panic 栈**([#5](https://github.com/zexadev/dsh-tether/issues/5))。iroh 默认解析器在 android 上经 JNI 读系统 DNS,Termux 没有 JVM;iroh 内部接住 panic 后回退 Google DNS,进程照常工作,但栈已经打出来了。现在 android 目标直接用等价的解析器,不再走 JNI。
+- **侧栏底部「连接手机」按钮与 dsh-cost-meter 互挤,被压成只剩图标的竖条**([#7](https://github.com/zexadev/dsh-tether/issues/7))。两者共用 `sidebar.footer.action` 插槽,横排下互挤。现改为纵向堆叠、各占一行,展开态与折叠成图标条两种状态都与「设置」按钮几何一致。
+- **手机每次打开 App,dsh web UI 都当作全新访问;配合 Prefab Anchored Standard 一类一进会话就写入历史的预设,每开一次多一条会话**([#7](https://github.com/zexadev/dsh-tether/issues/7))。手机侧本地代理端口此前每次连接随机,web UI 按源保存的「当前会话」等状态永远读不到。现在端口按主机派生固定,同一台电脑每次同源;不同电脑不同源,状态互不串。
+
 ## 0.1.11
 
 ### 新增
