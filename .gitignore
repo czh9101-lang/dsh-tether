@@ -4,3 +4,6 @@ node_modules/
 packages/
 *.jks
 *.keystore
+
+# Android 本地模式的运行时打包产物,由 scripts/build-android-runtime.mjs 生成
+app/src-tauri/android-runtime/

@@ -39,6 +39,10 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "androidRuntime": {
+      "node": "24.18.0",
+      "dsh": "0.1.2-rc.1"
     }
   },
   "peerDependencies": {
