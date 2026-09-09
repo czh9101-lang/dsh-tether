@@ -196,3 +196,10 @@ input::placeholder { color: var(--muted); }
   line-height: 1.7;
   padding: 48px 24px;
 }
+
+.topbar-hosts { flex: none; margin: 0; }
+.local-card { background: var(--fill-soft); border-radius: 12px; padding: 12px 14px 14px; margin-bottom: 18px; }
+.local-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.local-card .hint { margin: 6px 0 2px; }
+.local-card .btn-block { margin-top: 8px; }
+.local-card .error { margin: 8px 0 0; }

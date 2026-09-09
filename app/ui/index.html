@@ -13,9 +13,21 @@
       <span id="status-dot" class="dot dot-off"></span>
       <span id="status-text">未连接</span>
     </div>
+    <!-- 本地模式的 dsh 界面里没有插件按钮可回主机页,顶栏给一个常驻入口 -->
+    <button id="topbar-hosts" class="btn btn-slim btn-slim-quiet topbar-hosts hidden">主机</button>
   </header>
 
   <main id="view-hosts" class="view hidden">
+    <section id="local-card" class="local-card hidden">
+      <div class="local-head">
+        <span class="host-name">本机运行 DSH</span>
+        <span id="local-state" class="host-meta">未启动</span>
+      </div>
+      <p class="hint">没有电脑也能用:DeepSeek Harness 直接跑在这台手机上,会话和设置只存在手机里。</p>
+      <button id="local-open" class="btn btn-block">在本机运行</button>
+      <button id="local-stop" class="btn btn-quiet btn-block hidden">停止本机 DSH</button>
+      <p id="local-error" class="error hidden"></p>
+    </section>
     <h1>我的电脑</h1>
     <p class="hint">配过的电脑都记在这台手机上,换一台不用重新配对。</p>
     <ul id="host-list" class="host-list"></ul>
