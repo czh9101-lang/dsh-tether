@@ -109,10 +109,25 @@ jobs:
           keyAlias=$KEY_ALIAS
           password=$KEY_PASSWORD
           EOF
-      # 不带 --target 即四个 ABI 全建;--split-per-abi 让 flavor 名变成真实的
-      # ABI 名。不拆分时 gradle 把产物叫 "universal",而它只含实际构建出的
-      # 那些 ABI——名字与内容不符,发到 Release 上会误导人。
-      - run: pnpm exec tauri android build --apk --split-per-abi
+      # 本地模式的运行时(Node + dsh 依赖树):Node 镜像取自本仓库的
+      # android-runtime-* prerelease,dsh 依赖树按 android-arm64 从 npm 装,
+      # 生成 jniLibs/libnode.so 与 assets/dsh-runtime.tar。缓存按 package.json
+      # 里钉的版本失效。
+      - uses: actions/cache@v4
+        with:
+          path: app/src-tauri/android-runtime/cache
+          key: android-runtime-${{ hashFiles('package.json') }}
+      - run: node scripts/build-android-runtime.mjs
+      # --split-per-abi 让 flavor 名变成真实的 ABI 名。不拆分时 gradle 把产物叫
+      # "universal",而它只含实际构建出的那些 ABI——名字与内容不符,发到 Release
+      # 上会误导人。
+      # 分两次构建:运行时只有 arm64 的 Node,而 assets 是各 ABI 共享的,一次
+      # 构四个会把 160 MB 运行时塞进 x86 / arm 的包里。先带运行时构 arm64,再
+      # 删掉运行时目录构其余三个;后三个包里没有 libnode.so,App 不显示本地模式入口。
+      - run: pnpm exec tauri android build --apk --split-per-abi --target aarch64
+        working-directory: app
+      - run: rm -rf app/src-tauri/android-runtime/jniLibs app/src-tauri/android-runtime/assets
+      - run: pnpm exec tauri android build --apk --split-per-abi --target armv7 --target i686 --target x86_64
         working-directory: app
       # gradle 产出的名字形如 app-<abi>-release.apk:前缀是模块名,且不含版本号。
       # Release 页面上「我下的是哪一版」应当能从文件名看出来,所以在这里统一
