@@ -6,6 +6,7 @@ use std::path::Path;
 
 use anyhow::{bail, Context as _, Result};
 use iroh::endpoint::{RecvStream, SendStream};
+use tokio::io::{AsyncRead, AsyncReadExt as _};
 use iroh::SecretKey;
 use serde::{Deserialize, Serialize};
 
@@ -239,16 +240,14 @@ pub struct ProxyAuth {
 
 /// 逐字节读完一个 HTTP/1.1 请求头(含结尾空行)。逐字节与 read_line_bounded
 /// 同理:不越读,头之后的字节(请求体)原样留在流里交给后面的裸转发。
-pub async fn read_request_head(recv: &mut RecvStream) -> Result<String> {
+pub async fn read_request_head<R: AsyncRead + Unpin>(recv: &mut R) -> Result<String> {
     const MAX_HEAD: usize = 64 * 1024;
     let mut head = Vec::with_capacity(1024);
     let mut byte = [0u8; 1];
     while !head.ends_with(b"\r\n\r\n") {
-        let Some(n) = recv.read(&mut byte).await? else {
+        // tokio 语义:读到 0 字节即对端关闭
+        if recv.read(&mut byte).await? == 0 {
             bail!("对端在请求头结束前关闭了流");
-        };
-        if n == 0 {
-            continue;
         }
         head.push(byte[0]);
         if head.len() > MAX_HEAD {
