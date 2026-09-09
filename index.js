@@ -123,9 +123,16 @@ function applyUi(ctx) {
 
 /**
  * @param {import('@deepseek-ai/cordis').Context} ctx
- * @param {{hostBinary?: string, pair?: boolean}} [config]
+ * @param {{hostBinary?: string, pair?: boolean, sidecar?: boolean}} [config]
  */
 function apply(ctx, config = {}) {
+  // 手机 App 的本地模式:dsh 就跑在手机上,没有远端也没有配对,只要窄屏适配与
+  // 目录选择器替换(patch 里那两条)。侧栏底部的按钮在 iframe 里照样出现,它把
+  // 「打开主机页」交给外层 App,与远程模式一致。
+  if (config.sidecar === false) {
+    applyUi(ctx)
+    return
+  }
   const binary = config.hostBinary ?? resolveHostBinary()
   if (binary === undefined || !existsSync(binary)) {
     throw new Error(
