@@ -47,7 +47,9 @@ fn emit(app: &AppHandle, status: &'static str, detail: impl Into<String>) {
 }
 
 /// APK 原生库目录与 APK 本体路径。进程已加载本 crate 的 .so,`/proc/self/maps`
-/// 里就有它的绝对路径,同一目录就是原生库目录;APK 也被映射着(资源)。
+/// 里就有它的绝对路径,同一目录就是原生库目录。APK 不从映射表里挑:进程里还
+/// 映射着 WebView 等别的包的 base.apk,按顺序取会拿错;安装目录的布局是固定的
+/// `<install dir>/lib/<abi>/` 与 `<install dir>/base.apk`,从库目录反推即可。
 struct Layout {
     native_lib_dir: PathBuf,
     apk: PathBuf,
@@ -55,24 +57,19 @@ struct Layout {
 
 fn layout() -> Result<Layout> {
     let maps = std::fs::read_to_string("/proc/self/maps").context("读不到 /proc/self/maps")?;
-    let mut native_lib_dir = None;
-    let mut apk = None;
-    for line in maps.lines() {
-        let Some(path) = line.split_whitespace().nth(5) else { continue };
-        if native_lib_dir.is_none() && path.ends_with(SELF_LIB) {
-            native_lib_dir = Path::new(path).parent().map(Path::to_path_buf);
-        }
-        if apk.is_none() && path.ends_with(".apk") && path.contains("/data/app/") {
-            apk = Some(PathBuf::from(path));
-        }
-        if native_lib_dir.is_some() && apk.is_some() {
-            break;
-        }
-    }
-    Ok(Layout {
-        native_lib_dir: native_lib_dir.context("映射表里找不到本应用的原生库目录")?,
-        apk: apk.context("映射表里找不到 APK 路径")?,
-    })
+    let native_lib_dir = maps
+        .lines()
+        .filter_map(|line| line.split_whitespace().nth(5))
+        .find(|path| path.ends_with(SELF_LIB))
+        .and_then(|path| Path::new(path).parent().map(Path::to_path_buf))
+        .context("映射表里找不到本应用的原生库目录")?;
+    let apk = native_lib_dir
+        .parent()
+        .and_then(Path::parent)
+        .map(|install| install.join("base.apk"))
+        .filter(|p| p.is_file())
+        .context("原生库目录旁找不到 base.apk")?;
+    Ok(Layout { native_lib_dir, apk })
 }
 
 fn node_binary(layout: &Layout) -> PathBuf {
