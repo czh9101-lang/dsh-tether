@@ -1,0 +1,1 @@
+-keep class cc.zexa.dshtether.dshlocal.** { *; }

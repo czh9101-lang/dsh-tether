@@ -380,6 +380,10 @@ async fn local_start(app: AppHandle) -> Result<String, String> {
         }
         let (host, url) = local::start(&app).await.map_err(|e| format!("{e:#}"))?;
         *guard = Some(host);
+        // 前台通知让系统别在退后台时收掉进程;起不来只影响保活,不影响使用
+        if let Err(e) = tauri_plugin_dshlocal::start_service(&app, "DSH Tether", "本机 DSH 运行中") {
+            eprintln!("[local] 前台服务启动失败: {e}");
+        }
         Ok(url)
     }
     #[cfg(not(target_os = "android"))]
@@ -398,6 +402,7 @@ async fn local_stop(app: AppHandle) {
         if let Some(host) = host {
             host.stop().await;
         }
+        let _ = tauri_plugin_dshlocal::stop_service(&app);
     }
     #[cfg(not(target_os = "android"))]
     {
@@ -428,6 +433,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dshlocal::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             list_hosts,

@@ -1,0 +1,19 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- 前台服务只为让系统别在 App 退后台时收掉进程(node 子进程随之消失)。
+         类型用 specialUse:本地跑一个开发工具的服务端,不属于任何预设类型;
+         本 App 不经 Google Play 分发,不受其对 specialUse 的审核约束。 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <service
+            android:name="cc.zexa.dshtether.dshlocal.DshLocalService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the locally running DeepSeek Harness server alive while the app is in the background" />
+        </service>
+    </application>
+</manifest>
