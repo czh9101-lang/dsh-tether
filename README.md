@@ -102,6 +102,7 @@ From then on the app connects by itself when you open it.
 - Traffic is end-to-end encrypted by iroh (QUIC/TLS). When hole-punching succeeds it touches no third party; when it falls back, the relay only carries ciphertext it cannot read.
 - The plugin's own two HTTP routes apply the same browser-trust rules dsh applies to `/api`: the `Host` must be a loopback authority, an explicit cross-site marker is refused, and an attached `Origin` must match the Host. Cross-site requests from a malicious page and DNS-rebinding attempts both get a 403.
 - **Known limit**: those rules stop a browser from being used as a confused deputy; they do **not** stop a local process. A local process presents a loopback `Host`, so it can mint a pairing code and pair itself as a "phone" — meaning **an attacker who can already run code on your dev machine can turn that into long-term access**. Don't run this plugin on a machine where you run untrusted code.
+- **The phone side has a limit too**: the local proxy the app starts listens on 127.0.0.1 only, but any other app on the phone can connect to it and gets the full dsh interface; the port is derived from the host, so it is easier to find than a random one. Untrusted apps on the phone, or an unlocked phone in someone else's hands, amount to exposing the dev machine.
 
 ## Known limitations
 
