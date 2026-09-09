@@ -1291,7 +1291,7 @@ dependencies = [
 
 [[package]]
 name = "dsh-tether-app"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "iroh",
@@ -5654,7 +5654,7 @@ dependencies = [
 
 [[package]]
 name = "tether-core"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "iroh",
@@ -5665,7 +5665,7 @@ dependencies = [
 
 [[package]]
 name = "tether-host"
-version = "0.1.12"
+version = "0.1.13"
 dependencies = [
  "anyhow",
  "clap",
