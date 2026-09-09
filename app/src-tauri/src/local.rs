@@ -32,6 +32,9 @@ const LOG_LINES: usize = 200;
 pub struct LocalHost {
     child: Child,
     proxy_port: u16,
+    /// 代理的 accept 循环;stop 时必须中止,否则监听套接字一直占着固定端口,
+    /// 下次启动只能退到随机端口,web UI 的 localStorage 就换了源
+    proxy_task: tauri::async_runtime::JoinHandle<()>,
     log: Arc<Mutex<VecDeque<String>>>,
 }
 
@@ -179,13 +182,13 @@ async fn exchange_cookie(port: u16, token: &str) -> Result<String> {
 
 /// 本地注入代理:每条入站 TCP 读完请求头改写(Host、cookie、Connection: close),
 /// 再原样双向转发到 dsh 端口。与 sidecar 上的代理流是同一套改写。
-async fn start_proxy(dsh_port: u16, auth: Arc<ProxyAuth>) -> Result<u16> {
+async fn start_proxy(dsh_port: u16, auth: Arc<ProxyAuth>) -> Result<(u16, tauri::async_runtime::JoinHandle<()>)> {
     let listener = match TcpListener::bind(("127.0.0.1", LOCAL_PROXY_PORT)).await {
         Ok(l) => l,
         Err(_) => TcpListener::bind(("127.0.0.1", 0)).await.context("本地代理监听失败")?,
     };
     let port = listener.local_addr()?.port();
-    tauri::async_runtime::spawn(async move {
+    let task = tauri::async_runtime::spawn(async move {
         loop {
             let Ok((mut tcp, _)) = listener.accept().await else { break };
             let auth = auth.clone();
@@ -200,7 +203,7 @@ async fn start_proxy(dsh_port: u16, auth: Arc<ProxyAuth>) -> Result<u16> {
             });
         }
     });
-    Ok(port)
+    Ok((port, task))
 }
 
 fn push_log(log: &Arc<Mutex<VecDeque<String>>>, line: String) {
@@ -301,9 +304,9 @@ pub async fn start(app: &AppHandle) -> Result<(LocalHost, String)> {
     }
     let cookie = exchange_cookie(dsh_port, &token).await?;
     let auth = Arc::new(ProxyAuth { cookie, authority: format!("127.0.0.1:{dsh_port}") });
-    let proxy_port = start_proxy(dsh_port, auth).await?;
+    let (proxy_port, proxy_task) = start_proxy(dsh_port, auth).await?;
     let url = format!("http://127.0.0.1:{proxy_port}/");
-    Ok((LocalHost { child, proxy_port, log }, url))
+    Ok((LocalHost { child, proxy_port, proxy_task, log }, url))
 }
 
 impl LocalHost {
@@ -317,6 +320,7 @@ impl LocalHost {
     }
 
     pub async fn stop(mut self) {
+        self.proxy_task.abort();
         let _ = self.child.kill().await;
     }
 
