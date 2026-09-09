@@ -2,14 +2,14 @@
 
 <p align="center">
   <strong>Use the DeepSeek Harness on your dev machine, from your phone.</strong><br>
-  Across networks, peer to peer, through no server at all.<br>
+  Across networks, peer to peer, no server to set up — if hole-punching fails it falls back to a relay that sees only ciphertext.<br>
   No relay to configure, no shared Wi-Fi, no Linux on your phone.
 </p>
 
 <p align="center"><sub>An independent community project. Not affiliated with, partnered with, authorised by, or endorsed by DeepSeek.<br>No DeepSeek employee or upstream DeepSeek Harness team member is involved in this repository.<br><a href="README.zh.md">中文</a> · English</sub></p>
 
 <p align="center">
-  <img src="assets/banner.jpg" alt="Phone tethered directly to a dev machine — no server in between" width="100%">
+  <img src="assets/banner.jpg" alt="Phone tethered directly to a dev machine" width="100%">
 </p>
 
 <p align="center">

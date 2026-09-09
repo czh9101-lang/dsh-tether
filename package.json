@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-tether",
   "version": "0.1.12",
-  "description": "Mobile client for the DeepSeek Harness — use the dsh on your dev machine from your Android or iOS phone, remotely across networks, peer-to-peer with no server in between (iroh)",
+  "description": "Mobile client for the DeepSeek Harness — use the dsh on your dev machine from your Android or iOS phone, remotely across networks, peer-to-peer over iroh with no server to set up (falls back to a relay that only sees ciphertext)",
   "keywords": [
     "dsh",
     "dsh-plugin",

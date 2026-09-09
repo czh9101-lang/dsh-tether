@@ -2,14 +2,14 @@
 
 <p align="center">
   <strong>在手机上用你开发机里的 DeepSeek Harness。</strong><br>
-  跨网络,点对点直连,中间不经过任何服务器。<br>
+  跨网络,点对点打洞直连,不用架任何服务器;打不通才退回 relay,relay 只见密文。<br>
   不用配中转,不用同一个 WiFi,不用在手机上装 Linux。
 </p>
 
 <p align="center"><sub>独立的社区开源项目,与深度求索不存在隶属、合作、授权或背书关系。<br>本仓库无深度求索员工或 DeepSeek Harness 上游官方团队成员参与。<br>中文 · <a href="README.md">English</a></sub></p>
 
 <p align="center">
-  <img src="assets/banner.jpg" alt="手机与开发机直接相连,中间没有服务器" width="100%">
+  <img src="assets/banner.jpg" alt="手机与开发机直接相连" width="100%">
 </p>
 
 <p align="center">
