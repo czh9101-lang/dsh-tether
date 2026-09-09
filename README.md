@@ -1,9 +1,9 @@
 <h1 align="center">DSH Tether</h1>
 
 <p align="center">
-  <strong>Use the DeepSeek Harness on your dev machine, from your phone.</strong><br>
-  Across networks, peer to peer, no server to set up — if hole-punching fails it falls back to a relay that sees only ciphertext.<br>
-  No relay to configure, no shared Wi-Fi, no Linux on your phone.
+  <strong>DSH in your pocket: connect to your machine when you have one, run it on the phone when you don't.</strong><br>
+  Remote: across networks, peer to peer, no server to set up, no shared Wi-Fi — if hole-punching fails it falls back to a relay that sees only ciphertext.<br>
+  Local (Android): the DeepSeek Harness runs on the phone itself — install and go, no Termux, no commands.
 </p>
 
 <p align="center"><sub>An independent community project. Not affiliated with, partnered with, authorised by, or endorsed by DeepSeek.<br>No DeepSeek employee or upstream DeepSeek Harness team member is involved in this repository.<br><a href="README.zh.md">中文</a> · English</sub></p>
@@ -32,6 +32,8 @@
 
 DSH Tether carries the [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) web interface to your phone over a direct peer-to-peer connection. The agent keeps running on the machine your code lives on, and the phone gets DSH's own full interface — conversations, tool calls, approvals and settings, not a reimplementation of them. Pair once with a 6-digit code; after that the two ends find each other whatever network they are on.
 
+When there is no machine around, the same app can run DSH on the phone itself (Android) — see [Local mode](#local-mode-no-machine-needed-android).
+
 ## The case it solves
 
 **You are not on your machine's network, and you do not want a server in the middle.**
@@ -40,17 +42,28 @@ Reaching your own dev machine from a phone usually asks for one of two things: b
 
 If you only use your phone on the same Wi-Fi as your machine, you don't need any of this — a LAN setup is simpler.
 
+### Compared with ds-harness-remote
+
+The project most often compared with this one is [liguobao/ds-harness-remote](https://github.com/liguobao/ds-harness-remote). Going by both READMEs:
+
+| | DSH Tether | ds-harness-remote |
+| --- | --- | --- |
+| Connection | Direct first (iroh hole-punching), relay only as fallback and it sees ciphertext only; no account, no server to run | Sign in to its service, then LAN → P2P → TURN → Relay in turn; a self-hosted relay is supported |
+| No machine around | Android local mode: DSH runs on the phone | — |
+| Clients | Android, iOS (beta) | PC, Android, Web; no native iOS app |
+| License | MIT | No license file in the repository |
+
 ## Download and install
 
 | Where | Download | How |
 | --- | --- | --- |
 | Machine | — | `dsh plugin --profile web add dsh-plugin-tether` |
-| Phone | `dsh-tether-<version>-arm64.apk` from the [Release](../../releases/latest) | Signed — install it directly |
+| Phone | `dsh-tether-<version>-arm64.apk` from the [Release](../../releases/latest) | Signed — install it directly; local mode included |
 | Phone (iOS) | `dsh-tether-<version>-ios-unsigned.ipa` from the [Release](../../releases/latest) | **Beta**, unsigned — sign it yourself |
 
 The plugin carries a small Rust sidecar that owns the iroh connection, shipped as one package per platform; installing pulls only the one matching your system, with nothing to choose.
 
-The phone build is split by CPU architecture. **Any Android phone from the last decade takes `arm64`**; `arm` is for 32-bit legacy devices, and `x86` / `x86_64` are for emulators and ChromeOS. Picking the wrong one simply gets refused at install time.
+The phone build is split by CPU architecture. **Any Android phone from the last decade takes `arm64`**; `arm` is for 32-bit legacy devices, and `x86` / `x86_64` are for emulators and ChromeOS. Picking the wrong one simply gets refused at install time. Only the `arm64` build carries the local-mode runtime; the other three have no such entry.
 
 The iOS build is **beta**: this project has no Mac, so the package is only ever built in CI and has never run on a real device. You sign it yourself with AltStore, Sideloadly or similar (a free Apple ID expires after 7 days). Please open an issue if you hit anything.
 
@@ -69,6 +82,19 @@ Start `dsh web` as you normally would, then click **Connect phone** at the botto
 On the phone, open DSH Tether → **Add computer** → paste that whole line → name the computer → connect.
 
 From then on the app connects by itself when you open it.
+
+## Local mode: no machine needed (Android)
+
+Open the app → **Hosts** in the top bar → **Run on this phone**. The first start unpacks the runtime first (about 9 seconds measured); after that the DSH interface appears in about 2 seconds. Enter an API key in Settings and start talking.
+
+- **Install and go**: no Termux, no terminal, no commands, no root. Node 24 and the full dependency tree of dsh `0.1.2-rc.1` ship inside the APK and unpack offline on first start; after that only model API calls need the network.
+- **No pairing**: dsh is on this phone, there is no remote end. Sessions, settings and workspaces live only on the phone and are entirely separate from what you see when connected to a machine; switching back and forth touches neither.
+- **Stays up**: while running there is a persistent notification (a foreground service), so backgrounding or locking the screen does not get the process reclaimed. If the process is killed anyway, the next launch restarts it; sessions are already on disk.
+- **Versioned with the app**: the bundled dsh upgrades with the app; currently `0.1.2-rc.1`.
+- Only the `arm64` APK carries local mode; iOS forbids child processes, so the iOS build has no such entry.
+- The phone has no bash and no full coreutils, so shell-dependent tools are incomplete; chat and file read/write are unaffected.
+
+The Termux route still works if you prefer it: install dsh and this plugin inside Termux (it picks the `android-arm64` sidecar package automatically), then pair to it in remote mode — the phone is just another "machine". There is no guided setup for that path; it simply keeps working.
 
 ## Features
 
@@ -109,6 +135,7 @@ From then on the app connects by itself when you open it.
 - The iOS build is beta: built only in CI, never run on a real device, and you sign it yourself. Android is the one verified on real hardware.
 - The app connects when you open it and holds no background connection — Android's doze would not let it anyway.
 - The interface on the phone is DSH's own; the narrow-screen fit comes from minimal injected styles, so a dsh layout change may need a follow-up here.
+- Local mode exists only in the `arm64` build, never on iOS; the phone lacks bash and a full coreutils, so shell-dependent tools are incomplete. The `arm64` APK is about 71 MB because of the bundled runtime; the others are about 32 MB.
 - Verified against dsh **`0.1.0-rc.7`**, **`0.1.0-rc.8`**, **`0.1.2`** (alpha and rc.1) and **`0.1.5-alpha.1`**. dsh is in developer preview — check this line before assuming a newer dsh works. The browser authentication dsh introduced in 0.1.2-alpha is handled entirely on the machine side; the phone app needs no update for it.
 
 ## What has been verified
@@ -116,6 +143,8 @@ From then on the app connects by itself when you open it.
 Direct cross-network connection is the whole point of the project, so here is the evidence rather than the claim. With the phone's Wi-Fi off and only 5G, and the machine on home broadband, the plugin reported a public address on the selected path — meaning the two ends punched through to each other and the relay was never used. The first screenshot above is the phone rendering DSH over that path; note the absent Wi-Fi icon in its status bar.
 
 Pairing (including a wrong code being refused), approval delivery, and switching between saved machines were all verified on a real device. **The relay fallback has not yet been triggered on a real network.**
+
+Local mode was verified on a Redmi running Android 16: a fresh install reaches a working interface in 9.1 seconds (runtime unpacking included) and later starts take 2.1 seconds; the node process survives 30 seconds in the background; force-stopping the app and reopening it restores local mode automatically.
 
 ## Relationship to DeepSeek Harness
 
