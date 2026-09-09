@@ -145,16 +145,30 @@ function dirSize(p) {
   return readdirSync(p).reduce((n, e) => n + dirSize(join(p, e)), 0)
 }
 
-// DSH_HOME 骨架:dsh 首启只需要 profile 的这三个文件,其余自己补,不联网
+// DSH_HOME 骨架:dsh 首启只需要 profile 的这几个文件,其余自己补,不联网。
+// 本插件也装进去(sidecar: false):手机上的 dsh 同样需要窄屏适配与目录选择器
+// 替换;文件直接从仓库拷,与 App 同一版本,不经 npm。
 function writeHomeSkeleton(home) {
   const web = join(home, 'profiles', 'web')
-  mkdirSync(web, { recursive: true })
+  const plugin = join(web, 'node_modules', pkg.name)
+  mkdirSync(plugin, { recursive: true })
+  for (const f of ['index.js', 'cordis.patch.yml', 'package.json']) copyFileSync(join(root, f), join(plugin, f))
   writeFileSync(join(web, 'package.json'), JSON.stringify({
-    name: 'dsh-profile-web', private: true, dependencies: {},
-    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'], patchReload: 'live' } },
+    name: 'dsh-profile-web', private: true, dependencies: { [pkg.name]: pkg.version },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', pkg.name], patchReload: 'live' } },
   }, null, 2) + '\n')
-  writeFileSync(join(web, 'cordis.patch.yml'), '')
-  writeFileSync(join(web, 'pnpm-workspace.yaml'), 'packages: []\n')
+  // 与 dsh plugin --profile web 初始化出的文件一致:patch 必须是 YAML 数组,
+  // 空文件会被判为非法;workspace 的写法也照抄,免得 dsh 首启自己动它。
+  // patch 里按 id 给本插件配置 sidecar: false。
+  writeFileSync(join(web, 'cordis.patch.yml'), [
+    '# 本机 profile 的用户 patch 层。本插件以无 sidecar 模式运行:dsh 就在手机上,',
+    '# 只要界面适配,不要配对与远端。',
+    '- id: dsh-tether',
+    '  config:',
+    '    sidecar: false',
+    '',
+  ].join('\n'))
+  writeFileSync(join(web, 'pnpm-workspace.yaml'), ['packages:', '  - .', '', 'nodeLinker: hoisted', 'autoInstallPeers: false', ''].join('\n'))
 }
 
 async function mirror() {
