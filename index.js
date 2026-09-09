@@ -86,6 +86,41 @@ function refuse(res) {
   res.end('forbidden')
 }
 
+/** 与 sidecar 无关的部分:窄屏适配注入,以及手机上看配置文件的路由 */
+function applyUi(ctx) {
+  ctx.effect(() => ctx.webServer.tapIndex(injectNarrowScreenCss))
+
+  // 「打开配置文件」在宿主机桌面开编辑器,手机上按了毫无反应。这条路由把同一份
+  // 文件的内容原样交给手机自己渲染。路径由 Host 侧的 settings.documentPath 决定,
+  // 不接受客户端传路径——否则就成了任意文件读取。
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: CONFIG_DOCUMENT_PATH,
+    handler: async (req, res) => {
+      if (!isTrustedRequest(req)) return refuse(res)
+      const path = await ctx.settings.prepareDocument()
+      if (path === undefined) {
+        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
+        res.end('当前的设置存储不是本地文件,没有可查看的配置文件')
+        return
+      }
+      let text
+      try {
+        text = await readFile(path, 'utf8')
+      } catch (error) {
+        res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
+        res.end(`读不到配置文件 ${path}: ${String(error)}`)
+        return
+      }
+      res.writeHead(200, {
+        'content-type': 'application/json; charset=utf-8',
+        'cache-control': 'no-store',
+      })
+      res.end(JSON.stringify({ path, text }))
+    },
+  }))
+}
+
 /**
  * @param {import('@deepseek-ai/cordis').Context} ctx
  * @param {{hostBinary?: string, pair?: boolean}} [config]
@@ -185,7 +220,7 @@ function apply(ctx, config = {}) {
     }
   })
 
-  ctx.effect(() => ctx.webServer.tapIndex(injectNarrowScreenCss))
+  applyUi(ctx)
 
   // dsh 0.1.2-alpha 起浏览器界面要求认证:进程启动 token 经 GET /?token= 换成
   // HMAC 签名 cookie,index 与 /api 无 cookie 一律 401。cookie 是 SameSite=Strict
@@ -224,36 +259,6 @@ function apply(ctx, config = {}) {
     const timer = setInterval(() => { void exchangeWithRetry() }, 12 * 60 * 60 * 1000)
     connCtx.effect(() => () => clearInterval(timer))
   })
-
-  // 「打开配置文件」在宿主机桌面开编辑器,手机上按了毫无反应。这条路由把同一份
-  // 文件的内容原样交给手机自己渲染。路径由 Host 侧的 settings.documentPath 决定,
-  // 不接受客户端传路径——否则就成了任意文件读取。
-  ctx.effect(() => ctx.webServer.register({
-    kind: 'exact',
-    path: CONFIG_DOCUMENT_PATH,
-    handler: async (req, res) => {
-      if (!isTrustedRequest(req)) return refuse(res)
-      const path = await ctx.settings.prepareDocument()
-      if (path === undefined) {
-        res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' })
-        res.end('当前的设置存储不是本地文件,没有可查看的配置文件')
-        return
-      }
-      let text
-      try {
-        text = await readFile(path, 'utf8')
-      } catch (error) {
-        res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
-        res.end(`读不到配置文件 ${path}: ${String(error)}`)
-        return
-      }
-      res.writeHead(200, {
-        'content-type': 'application/json; charset=utf-8',
-        'cache-control': 'no-store',
-      })
-      res.end(JSON.stringify({ path, text }))
-    },
-  }))
 
   // 配对窗口只在白名单为空时自动开一次;换手机、加第二台设备都得能再开一个,
   // 否则用户只能去手工删 paired.json。这条路由就是那个开关。
