@@ -5,6 +5,9 @@
 
 use std::path::PathBuf;
 
+#[cfg(target_os = "android")]
+mod local;
+
 use anyhow::{bail, Context as _, Result};
 use iroh::endpoint::presets;
 use iroh::{Endpoint, EndpointId};
@@ -22,6 +25,9 @@ struct AppState {
     outgoing: Mutex<Option<mpsc::Sender<Wire>>>,
     /// 本地代理监听端口;WebView 指向它即拿到主机的完整 dsh web UI
     proxy_port: Mutex<Option<u16>>,
+    /// 本地模式:手机上跑着的 dsh(仅 Android arm64 构建有)
+    #[cfg(target_os = "android")]
+    local: Mutex<Option<local::LocalHost>>,
 }
 
 /// 一台已配对主机
@@ -327,6 +333,96 @@ async fn connect(app: AppHandle, id: Option<String>) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct LocalStatus {
+    available: bool,
+    running: bool,
+    url: Option<String>,
+}
+
+/// 本地模式状态:这个构建有没有运行时、dsh 是否在跑、在跑的话 WebView 该加载哪个 URL
+#[tauri::command]
+async fn local_status(app: AppHandle) -> LocalStatus {
+    #[cfg(target_os = "android")]
+    {
+        let state = app.state::<AppState>();
+        let mut guard = state.local.lock().await;
+        // 进程死了就当没在跑,免得把死 URL 交给 WebView
+        if guard.as_mut().is_some_and(|h| !h.alive()) {
+            *guard = None;
+        }
+        return LocalStatus {
+            available: local::available(),
+            running: guard.is_some(),
+            url: guard.as_ref().map(|h| h.url()),
+        };
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        LocalStatus { available: false, running: false, url: None }
+    }
+}
+
+/// 起本机 dsh;已在跑就直接返回现有 URL
+#[tauri::command]
+async fn local_start(app: AppHandle) -> Result<String, String> {
+    #[cfg(target_os = "android")]
+    {
+        let state = app.state::<AppState>();
+        let mut guard = state.local.lock().await;
+        if let Some(host) = guard.as_mut() {
+            if host.alive() {
+                return Ok(host.url());
+            }
+            *guard = None;
+        }
+        let (host, url) = local::start(&app).await.map_err(|e| format!("{e:#}"))?;
+        *guard = Some(host);
+        Ok(url)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Err("这个平台没有本地模式".into())
+    }
+}
+
+#[tauri::command]
+async fn local_stop(app: AppHandle) {
+    #[cfg(target_os = "android")]
+    {
+        let state = app.state::<AppState>();
+        let host = state.local.lock().await.take();
+        if let Some(host) = host {
+            host.stop().await;
+        }
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+    }
+}
+
+/// 本机 dsh 的最近输出;启动失败时给用户看原因
+#[tauri::command]
+async fn local_log(app: AppHandle) -> Vec<String> {
+    #[cfg(target_os = "android")]
+    {
+        let state = app.state::<AppState>();
+        return match state.local.lock().await.as_ref() {
+            Some(host) => host.log_tail().await,
+            None => Vec::new(),
+        };
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = app;
+        Vec::new()
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -339,7 +435,11 @@ pub fn run() {
             forget_host,
             pair,
             connect,
-            app_version
+            app_version,
+            local_status,
+            local_start,
+            local_stop,
+            local_log
         ])
         .run(tauri::generate_context!())
         .expect("tauri 启动失败");

@@ -66,6 +66,19 @@ android {
             )
         }
     }
+    // 本地模式的运行时由 scripts/build-android-runtime.mjs 生成到 ../../android-runtime/(不入 git):
+    // node 可执行文件以 libnode.so 走 jniLibs(Android 10+ 只允许 exec APK 原生库目录里的文件),
+    // 其余进 assets。没生成时目录不存在,gradle 照常构建,APK 里只是没有本地模式。
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("../../android-runtime/jniLibs")
+            assets.srcDirs("../../android-runtime/assets")
+        }
+    }
+    packaging {
+        // 让 libnode.so 落成真实文件而不是留在 APK 里按需 mmap:exec 需要一个路径
+        jniLibs.useLegacyPackaging = true
+    }
     kotlinOptions {
         jvmTarget = "1.8"
     }
