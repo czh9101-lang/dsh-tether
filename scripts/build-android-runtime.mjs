@@ -18,6 +18,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { dirname, join, basename } from 'node:path'
 import { platform, tmpdir } from 'node:os'
+import { patchHardLinks } from './android-link-fallback.mjs'
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'))
@@ -219,6 +220,8 @@ async function assemble() {
   const prebuild = join(stage, 'app', 'node_modules', 'node-pty', 'prebuilds', 'android-arm64')
   mkdirSync(prebuild, { recursive: true })
   copyFileSync(join(rt, 'pty.node'), join(prebuild, 'pty.node'))
+  // Android 不许 App 建硬链接,dsh 里用 link 发布文件的两处换成回退实现,见 android-link-fallback.mjs
+  patchHardLinks(join(stage, 'app', 'node_modules'))
   prune(join(stage, 'app', 'node_modules'))
   writeHomeSkeleton(join(stage, 'home'))
   writeFileSync(join(stage, 'manifest.json'), JSON.stringify({ node: pin.node, dsh: pin.dsh, app: pkg.version }, null, 2) + '\n')
