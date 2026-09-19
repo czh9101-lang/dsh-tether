@@ -696,7 +696,11 @@ async fn phone_sim_main(
         let listener = tokio::net::TcpListener::bind(listen)
             .await
             .with_context(|| format!("{}{listen}", t("本地代理监听失败: ", "the local proxy could not listen on ")))?;
-        eprintln!("[phone-sim] 代理就绪: http://{listen} → [iroh] → host 的 dsh web");
+        eprintln!(
+            "[phone-sim] {}http://{listen}{}",
+            t("代理就绪: ", "proxy ready: "),
+            t(" → [iroh] → host 那台的 dsh web", " → [iroh] → the dsh web on the host machine"),
+        );
         let pconn = conn.clone();
         tokio::spawn(async move {
             loop {

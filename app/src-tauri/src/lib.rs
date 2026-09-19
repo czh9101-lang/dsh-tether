@@ -390,7 +390,7 @@ async fn local_start(app: AppHandle) -> Result<String, String> {
         *guard = Some(host);
         // 前台通知让系统别在退后台时收掉进程;起不来只影响保活,不影响使用
         if let Err(e) = tauri_plugin_dshlocal::start_service(&app, "DSH Tether", t("本机 DSH 运行中", "DSH is running on this phone")) {
-            eprintln!("[local] 前台服务启动失败: {e}");
+            eprintln!("[local] {}{e}", t("前台服务启动失败: ", "the foreground service failed to start: "));
         }
         Ok(url)
     }

@@ -199,7 +199,9 @@ async fn exchange_cookie(port: u16, token: &str) -> Result<String> {
 async fn start_proxy(dsh_port: u16, auth: Arc<ProxyAuth>) -> Result<(u16, tauri::async_runtime::JoinHandle<()>)> {
     let listener = match TcpListener::bind(("127.0.0.1", LOCAL_PROXY_PORT)).await {
         Ok(l) => l,
-        Err(_) => TcpListener::bind(("127.0.0.1", 0)).await.context("本地代理监听失败")?,
+        Err(_) => TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .context(t("本地代理监听失败", "the local proxy could not listen"))?,
     };
     let port = listener.local_addr()?.port();
     let task = tauri::async_runtime::spawn(async move {

@@ -670,7 +670,7 @@ function injectNarrowScreenCss(html) {
             .catch(function (e) {
               drop.disabled = false
               drop.textContent = tx('移除失败', 'Removal failed')
-              console.error('[dsh-tether] 移除设备失败', e)
+              console.error('[dsh-tether] ' + tx('移除设备失败', 'could not remove the device'), e)
             })
         })
         row.append(dot, label, drop)
