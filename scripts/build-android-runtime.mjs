@@ -224,13 +224,16 @@ async function assemble() {
   patchHardLinks(join(stage, 'app', 'node_modules'))
   prune(join(stage, 'app', 'node_modules'))
   writeHomeSkeleton(join(stage, 'home'))
-  writeFileSync(join(stage, 'manifest.json'), JSON.stringify({ node: pin.node, dsh: pin.dsh, app: pkg.version }, null, 2) + '\n')
+  const manifest = JSON.stringify({ node: pin.node, dsh: pin.dsh, app: pkg.version }, null, 2) + '\n'
+  writeFileSync(join(stage, 'manifest.json'), manifest)
 
   const jni = join(OUT, 'jniLibs', 'arm64-v8a')
   mkdirSync(jni, { recursive: true })
   copyFileSync(join(rt, 'node'), join(jni, 'libnode.so'))
   const assets = join(OUT, 'assets')
   mkdirSync(assets, { recursive: true })
+  // 同一份 manifest 再单独放一份:App 判断已解压的运行时是否还是包里这份,不必翻 158 MB 的 tar
+  writeFileSync(join(assets, 'dsh-runtime-manifest.json'), manifest)
   const tarPath = join(assets, 'dsh-runtime.tar')
   rmSync(tarPath, { force: true })
   execFileSync(tar, ['-cf', tarPath, '-C', stage, '.'], { stdio: 'inherit' })

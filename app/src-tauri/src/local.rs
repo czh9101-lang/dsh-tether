@@ -26,6 +26,8 @@ const LOCAL_PROXY_PORT: u16 = 31999;
 const SELF_LIB: &str = "/libdsh_tether_app_lib.so";
 /// 运行时 tar 在 APK 里的路径
 const RUNTIME_ASSET: &str = "assets/dsh-runtime.tar";
+/// 同一份 manifest 在 APK 里另放的一份,用来判断已解压的运行时是不是包里这份
+const RUNTIME_MANIFEST: &str = "assets/dsh-runtime-manifest.json";
 /// 日志环形缓冲行数;够看清启动失败的原因
 const LOG_LINES: usize = 200;
 
@@ -92,11 +94,22 @@ fn runtime_dir(app: &AppHandle) -> Result<PathBuf> {
     Ok(data_dir(app)?.join("dsh-runtime"))
 }
 
-/// 运行时随 App 版本一起变;版本不同就重新解压,不比对 tar 内容
-fn runtime_ready(dir: &Path) -> bool {
-    let Ok(text) = std::fs::read_to_string(dir.join("manifest.json")) else { return false };
-    let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else { return false };
-    value.get("app").and_then(|v| v.as_str()) == Some(env!("CARGO_PKG_VERSION"))
+/// 已解压的运行时是不是这个 APK 里的那份:逐字比对 manifest(App 版本 + 内置的 Node 与 dsh
+/// 版本)。只比 App 版本会漏掉「版本号没动但换了内置 dsh」的构建,手机上留着旧运行时还以为已就绪。
+/// 不比对 tar 内容:158 MB,每次启动都读不值当,manifest 变了就说明 tar 变了。
+fn runtime_ready(apk: &Path, dir: &Path) -> bool {
+    let Ok(unpacked) = std::fs::read_to_string(dir.join("manifest.json")) else { return false };
+    let Ok(packed) = manifest_in_apk(apk) else { return false };
+    unpacked.trim() == packed.trim()
+}
+
+fn manifest_in_apk(apk: &Path) -> Result<String> {
+    use std::io::Read as _;
+    let mut zip = zip::ZipArchive::new(std::fs::File::open(apk)?)?;
+    let mut entry = zip.by_name(RUNTIME_MANIFEST)?;
+    let mut text = String::new();
+    entry.read_to_string(&mut text)?;
+    Ok(text)
 }
 
 /// 从 APK 里把运行时 tar 解到数据目录。先解到临时目录再改名,半途被杀不会留下
@@ -226,7 +239,7 @@ pub async fn start(app: &AppHandle) -> Result<(LocalHost, String)> {
         bail!("这个构建不含本地运行时");
     }
     let runtime = runtime_dir(app)?;
-    if !runtime_ready(&runtime) {
+    if !runtime_ready(&layout.apk, &runtime) {
         emit(app, "extracting", "首次使用,正在解压运行时…");
         let app2 = app.clone();
         let apk = layout.apk.clone();
