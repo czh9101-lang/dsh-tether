@@ -17,6 +17,7 @@ use clap::{Parser, Subcommand};
 use iroh::endpoint::{presets, Connection};
 use iroh::{Endpoint, EndpointId};
 use rand::Rng;
+use tether_core::i18n::t;
 use tether_core::{
     ALPN, load_or_create_secret, MAX_LINE, MAX_UNPAIRED_LINE, ProxyAuth, read_line_bounded, read_request_head, rewrite_request_head, Wire, write_line, write_private,
 };
@@ -26,21 +27,13 @@ use tokio::sync::{mpsc, Mutex};
 
 /// 人读日志的语言。插件启动 sidecar 时按电脑的系统语言传 --lang,两边始终一致;
 /// 直接手跑时按 LC_ALL/LANG 猜,猜不到按中文(与历来行为一致)。
-static ENGLISH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
 fn set_lang(explicit: Option<&str>) {
     let tag = explicit
         .map(str::to_string)
         .or_else(|| std::env::var("LC_ALL").ok())
         .or_else(|| std::env::var("LANG").ok())
         .unwrap_or_else(|| "zh".to_string());
-    let english = !tag.trim().to_ascii_lowercase().starts_with("zh");
-    ENGLISH.store(english, std::sync::atomic::Ordering::Relaxed);
-}
-
-/// 同一句话的两种写法,按当前语言取一个
-fn t(zh: &'static str, en: &'static str) -> &'static str {
-    if ENGLISH.load(std::sync::atomic::Ordering::Relaxed) { en } else { zh }
+    tether_core::i18n::set_from_tag(&tag);
 }
 
 const PAIRING_TTL: Duration = Duration::from_secs(600);

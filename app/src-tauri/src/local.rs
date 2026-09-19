@@ -11,7 +11,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use anyhow::{bail, Context as _, Result};
-use crate::i18n::t;
+use tether_core::i18n::t;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tether_core::{read_request_head, rewrite_request_head, ProxyAuth};

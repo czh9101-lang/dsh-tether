@@ -1,6 +1,8 @@
 //! 审批遥控线协议与连接基元:host(电脑侧 sidecar)、手机 App、phone-sim 共用。
 //! 协议:一连接一条控制 bi 流,JSON-lines;首行 Hello(已配对)或 Pair(配对)。
 
+pub mod i18n;
+
 use std::io::Write as _;
 use std::path::Path;
 

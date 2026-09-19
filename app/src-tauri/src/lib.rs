@@ -7,10 +7,9 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "android")]
 mod local;
-mod i18n;
 
 use anyhow::{bail, Context as _, Result};
-use i18n::t;
+use tether_core::i18n::t;
 use iroh::endpoint::presets;
 use iroh::{Endpoint, EndpointId};
 use tether_core::{
@@ -265,7 +264,7 @@ fn list_hosts(app: AppHandle) -> HostBook {
 /// 界面把系统语言报进来,Rust 侧的报错文案照它出中文或英文
 #[tauri::command]
 fn set_lang(tag: String) {
-    i18n::set_from_tag(&tag);
+    tether_core::i18n::set_from_tag(&tag);
 }
 
 /// 构建时写死的版本号,避免界面上再手抄一份而漂移

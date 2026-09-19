@@ -1,7 +1,8 @@
-//! 报错与状态文案的中英两种写法。
+//! 报错与状态文案的中英两种写法。App 与 sidecar 共用。
 //!
-//! Android 上取系统语言要走 JNI,为几十条文案引一套 JNI 调用不划算,所以由 WebView 在启动时
-//! 把 `navigator.language` 报进来(在 WebView 里它就是系统语言)。设定之前默认中文,与旧版一致。
+//! 语言由各自那侧报进来:App 里 Android 取系统语言要走 JNI,为几十条文案引一套 JNI 调用不划算,
+//! 所以由 WebView 启动时把 `navigator.language` 报进来(在 WebView 里它就是系统语言);sidecar 侧
+//! 由插件按电脑的语言传 --lang,自己手跑时看环境。设定之前默认中文,与旧版一致。
 //! 不建 key 表:调用点就近写两种说法,读代码时能直接看到用户会看到什么,也不会有 key 对不上的漂移。
 use std::sync::atomic::{AtomicBool, Ordering};
 

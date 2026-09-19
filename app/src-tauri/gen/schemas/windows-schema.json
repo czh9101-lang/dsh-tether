@@ -2361,6 +2361,30 @@
           "markdownDescription": "Denies the unminimize command without any pre-configured scope."
         },
         {
+          "description": "Enables the start_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "dshlocal:allow-start-service",
+          "markdownDescription": "Enables the start_service command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the stop_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "dshlocal:allow-stop-service",
+          "markdownDescription": "Enables the stop_service command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the start_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "dshlocal:deny-start-service",
+          "markdownDescription": "Denies the start_service command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the stop_service command without any pre-configured scope.",
+          "type": "string",
+          "const": "dshlocal:deny-stop-service",
+          "markdownDescription": "Denies the stop_service command without any pre-configured scope."
+        },
+        {
           "description": "This permission set configures which\nnotification features are by default exposed.\n\n#### Granted Permissions\n\nIt allows all notification related features.\n\n\n#### This default permission set includes:\n\n- `allow-is-permission-granted`\n- `allow-request-permission`\n- `allow-notify`\n- `allow-register-action-types`\n- `allow-register-listener`\n- `allow-cancel`\n- `allow-get-pending`\n- `allow-remove-active`\n- `allow-get-active`\n- `allow-check-permissions`\n- `allow-show`\n- `allow-batch`\n- `allow-list-channels`\n- `allow-delete-channel`\n- `allow-create-channel`\n- `allow-permission-state`",
           "type": "string",
           "const": "notification:default",
