@@ -8,6 +8,9 @@ const PROJECT_URL = 'https://github.com/zexadev/dsh-tether'
 const el = (id) => document.getElementById(id)
 const views = { hosts: el('view-hosts'), pair: el('view-pair'), status: el('view-status') }
 
+// 静态文案在任何视图显示之前填好,否则先渲染出来的是空白节点
+applyStaticI18n()
+
 /** 连接已建立且 web UI 正在显示——决定「取消/返回」该退回哪里 */
 let live = false
 let book = { hosts: [], current: null }
@@ -84,8 +87,8 @@ async function ensureNotifyPermission() {
 function notifyApproval({ toolName, reason }) {
   if (!notifyAllowed) return
   notification.sendNotification({
-    title: `等待你批准:${toolName || '一个操作'}`,
-    body: reason || '打开 DSH Tether 查看并批准',
+    title: t('notify.title', { tool: toolName || t('notify.someAction') }),
+    body: reason || t('notify.body'),
   })
 }
 
@@ -139,13 +142,13 @@ function renderHosts() {
       const input = document.createElement('input')
       input.className = 'host-rename'
       input.value = host.label
-      input.placeholder = '给这台电脑起个名字'
+      input.placeholder = t('hosts.namePlaceholder')
       const save = () => {
         rowMode.delete(host.id)
         runHostAction(invoke('rename_host', { id: host.id, label: input.value }))
       }
       input.addEventListener('keydown', (e) => { if (e.key === 'Enter') save() })
-      li.append(input, slimButton('保存', save), slimButton('取消', () => {
+      li.append(input, slimButton(t('hosts.save'), save), slimButton(t('common.cancel'), () => {
         rowMode.delete(host.id)
         renderHosts()
       }, true))
@@ -162,25 +165,25 @@ function renderHosts() {
     const meta = document.createElement('span')
     meta.className = 'host-meta'
     meta.textContent = mode === 'confirm'
-      ? '删除后需要重新配对才能连回来'
-      : (host.id === book.current ? `${shortId(host.id)} · 上次使用` : shortId(host.id))
+      ? t('hosts.deleteWarning')
+      : (host.id === book.current ? t('hosts.lastUsed', { id: shortId(host.id) }) : shortId(host.id))
     main.append(name, meta)
     if (mode === 'view') main.addEventListener('click', () => { startConnect(host.id) })
     li.append(main)
 
     if (mode === 'confirm') {
-      li.append(slimButton('确认删除', () => {
+      li.append(slimButton(t('hosts.confirmDelete'), () => {
         rowMode.delete(host.id)
         runHostAction(invoke('forget_host', { id: host.id }))
-      }), slimButton('取消', () => {
+      }), slimButton(t('common.cancel'), () => {
         rowMode.delete(host.id)
         renderHosts()
       }, true))
     } else {
-      li.append(slimButton('改名', () => {
+      li.append(slimButton(t('hosts.rename'), () => {
         rowMode.set(host.id, 'rename')
         renderHosts()
-      }, true), slimButton('删除', () => {
+      }, true), slimButton(t('hosts.delete'), () => {
         rowMode.set(host.id, 'confirm')
         renderHosts()
       }, true))
@@ -193,11 +196,11 @@ function renderHosts() {
 /** 顶栏的「已连接 · X」;改名后要跟着变,所以单独一处 */
 function showConnectedLabel() {
   if (mode === 'local') {
-    setStatus('connected', '本机 · DSH 运行中')
+    setStatus('connected', t('status.local'))
     return
   }
   const n = hostName(connectingTo)
-  setStatus('connected', n ? `已连接 · ${n}` : '已连接')
+  setStatus('connected', n ? t('status.connectedTo', { name: n }) : t('status.connected'))
 }
 
 async function refreshHosts() {
@@ -220,10 +223,10 @@ function onState({ status, detail }) {
     el('reconnect-row').classList.add('hidden')
   } else if (status === 'connecting') {
     const n = hostName(connectingTo)
-    setStatus('connecting', n ? `连接 ${n}…` : '连接中…')
+    setStatus('connecting', n ? t('status.connectingTo', { name: n }) : t('status.connecting'))
   } else {
     live = false
-    setStatus('disconnected', '未连接')
+    setStatus('disconnected', t('status.disconnected'))
     el('webui').removeAttribute('src')
     // 配对页正开着就把失败原因显示在那里,别把用户踢走
     if (!views.pair.classList.contains('hidden')) {
@@ -243,7 +246,7 @@ function onState({ status, detail }) {
 function startConnect(id) {
   mode = 'remote'
   rememberMode('remote')
-  el('connecting-note').textContent = '正在打开电脑上的 DeepSeek Harness…'
+  el('connecting-note').textContent = t('status.opening')
   connectingTo = id ?? book.current ?? (book.hosts[0]?.id ?? null)
   el('reconnect-row').classList.add('hidden')
   el('connecting-note').classList.remove('hidden')
@@ -271,7 +274,7 @@ el('pair-submit').addEventListener('click', async () => {
     if (!code) code = c.trim()
   }
   if (!peer || !code) {
-    err.textContent = '配对串不完整:要电脑上显示的那一整行'
+    err.textContent = t('pair.incomplete')
     err.classList.remove('hidden')
     return
   }
@@ -336,8 +339,8 @@ async function refreshLocalCard() {
   const card = el('local-card')
   card.classList.toggle('hidden', !st.available)
   if (!st.available) return
-  el('local-state').textContent = st.running ? '运行中' : '未启动'
-  el('local-open').textContent = st.running ? '打开' : '在本机运行'
+  el('local-state').textContent = t(st.running ? 'local.running' : 'local.idle')
+  el('local-open').textContent = t(st.running ? 'local.open' : 'local.start')
   el('local-stop').classList.toggle('hidden', !st.running)
   if (st.running) localUrl = st.url
 }
@@ -354,7 +357,7 @@ async function startLocal() {
   connectingTo = null
   el('local-error').classList.add('hidden')
   el('reconnect-row').classList.add('hidden')
-  el('connecting-note').textContent = '正在启动本机 DSH…'
+  el('connecting-note').textContent = t('local.starting')
   el('connecting-note').classList.remove('hidden')
   showView('status')
   try {
@@ -364,13 +367,13 @@ async function startLocal() {
     el('webui').removeAttribute('src')
     el('connecting-note').classList.add('hidden')
     el('reconnect-text').textContent = String(e)
-    el('reconnect').textContent = '重试'
+    el('reconnect').textContent = t('status.retry')
     el('reconnect-row').classList.remove('hidden')
     return
   }
-  el('reconnect').textContent = '重新连接'
+  el('reconnect').textContent = t('status.reconnect')
   showWebUi(localUrl)
-  setStatus('connected', '本机 · DSH 运行中')
+  setStatus('connected', t('status.local'))
 }
 
 async function stopLocal() {
@@ -379,7 +382,7 @@ async function stopLocal() {
   if (mode === 'local') {
     live = false
     el('webui').removeAttribute('src')
-    setStatus('disconnected', '未连接')
+    setStatus('disconnected', t('status.disconnected'))
     mode = 'remote'
   }
   localUrl = null
