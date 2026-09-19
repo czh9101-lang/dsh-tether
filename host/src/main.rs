@@ -25,8 +25,6 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{mpsc, Mutex};
 
-/// 人读日志的语言。插件启动 sidecar 时按电脑的系统语言传 --lang,两边始终一致;
-/// 直接手跑时按 LC_ALL/LANG 猜,猜不到按中文(与历来行为一致)。
 /// clap 渲染 --help 时语言就得是定的,所以 --lang 得自己先从 argv 里捞一遍
 fn lang_from_argv() -> Option<String> {
     let mut args = std::env::args().skip(1);
@@ -41,13 +39,70 @@ fn lang_from_argv() -> Option<String> {
     None
 }
 
+/// 人读日志与帮助的语言。插件启动 sidecar 时按电脑的系统语言传 --lang,两边始终一致;
+/// 直接手跑时先看 LC_ALL/LANG,没有就问系统——Windows 和 macOS 上这两个变量通常根本不存在,
+/// 只认环境变量就会把英文用户当中文用户;系统也问不出来才退回中文。
 fn set_lang(explicit: Option<&str>) {
-    let tag = explicit
-        .map(str::to_string)
-        .or_else(|| std::env::var("LC_ALL").ok())
-        .or_else(|| std::env::var("LANG").ok())
-        .unwrap_or_else(|| "zh".to_string());
+    let tag = resolve_tag(
+        explicit,
+        std::env::var("LC_ALL").ok(),
+        std::env::var("LANG").ok(),
+        sys_locale::get_locale(),
+    );
     tether_core::i18n::set_from_tag(&tag);
+}
+
+/// 四个来源的优先级。取值都从外面传进来,才好逐条验——否则只能在跑的那台机器上碰运气。
+fn resolve_tag(
+    explicit: Option<&str>,
+    lc_all: Option<String>,
+    lang: Option<String>,
+    system: Option<String>,
+) -> String {
+    [explicit.map(str::to_string), lc_all, lang, system]
+        .into_iter()
+        .flatten()
+        .find(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| "zh".to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_tag;
+
+    fn s(v: &str) -> Option<String> {
+        Some(v.to_string())
+    }
+
+    #[test]
+    fn explicit_lang_wins() {
+        assert_eq!(
+            resolve_tag(Some("en"), s("zh_CN.UTF-8"), s("zh_CN.UTF-8"), s("zh-CN")),
+            "en"
+        );
+    }
+
+    #[test]
+    fn lc_all_before_lang() {
+        assert_eq!(resolve_tag(None, s("en_GB.UTF-8"), s("zh_CN.UTF-8"), None), "en_GB.UTF-8");
+    }
+
+    #[test]
+    fn system_locale_when_env_absent() {
+        // Windows 与 macOS 上 LC_ALL/LANG 通常都没有,只认环境变量就会把英文用户当中文用户
+        assert_eq!(resolve_tag(None, None, None, s("en-GB")), "en-GB");
+    }
+
+    #[test]
+    fn empty_env_does_not_count() {
+        // LANG= 空串是"没设",不是"设成了非中文"
+        assert_eq!(resolve_tag(None, s(""), s("  "), s("zh-CN")), "zh-CN");
+    }
+
+    #[test]
+    fn chinese_when_nothing_is_known() {
+        assert_eq!(resolve_tag(None, None, None, None), "zh");
+    }
 }
 
 const PAIRING_TTL: Duration = Duration::from_secs(600);
