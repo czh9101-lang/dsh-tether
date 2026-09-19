@@ -27,6 +27,20 @@ use tokio::sync::{mpsc, Mutex};
 
 /// 人读日志的语言。插件启动 sidecar 时按电脑的系统语言传 --lang,两边始终一致;
 /// 直接手跑时按 LC_ALL/LANG 猜,猜不到按中文(与历来行为一致)。
+/// clap 渲染 --help 时语言就得是定的,所以 --lang 得自己先从 argv 里捞一遍
+fn lang_from_argv() -> Option<String> {
+    let mut args = std::env::args().skip(1);
+    while let Some(a) = args.next() {
+        if let Some(v) = a.strip_prefix("--lang=") {
+            return Some(v.to_string());
+        }
+        if a == "--lang" {
+            return args.next();
+        }
+    }
+    None
+}
+
 fn set_lang(explicit: Option<&str>) {
     let tag = explicit
         .map(str::to_string)
@@ -39,11 +53,17 @@ fn set_lang(explicit: Option<&str>) {
 const PAIRING_TTL: Duration = Duration::from_secs(600);
 const PAIRING_MAX_ATTEMPTS: u32 = 3;
 
+// 帮助文本同样走 t()。不用 /// 写:那样中文注释与英文帮助得各存一份,改一边忘一边。
 #[derive(Parser)]
-#[command(name = "tether-host", about = "dsh 审批遥控:电脑侧 iroh 端(插件 sidecar)与手机模拟端")]
+#[command(name = "tether-host", about = t(
+    "dsh 审批遥控:电脑侧 iroh 端(插件 sidecar)与手机模拟端",
+    "dsh approval tether: the computer-side iroh endpoint (the plugin's sidecar), plus a phone stand-in",
+))]
 struct Cli {
-    /// 人读日志的语言(zh / en);不给则看 LC_ALL、LANG
-    #[arg(long, global = true)]
+    #[arg(long, global = true, help = t(
+        "人读日志与这份帮助的语言(zh / en);不给则看 LC_ALL、LANG",
+        "language for the logs and for this help (zh / en); otherwise LC_ALL and LANG decide",
+    ))]
     lang: Option<String>,
     #[command(subcommand)]
     cmd: Cmd,
@@ -51,44 +71,71 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// sidecar 模式:stdio JSON-lines 对插件,iroh 对手机
+    #[command(about = t(
+        "sidecar 模式:stdio JSON-lines 对插件,iroh 对手机",
+        "sidecar mode: JSON-lines over stdio to the plugin, iroh to the phone",
+    ))]
     Host {
-        /// 身份与配对白名单目录
-        #[arg(long)]
+        #[arg(long, help = t(
+            "身份与配对白名单目录",
+            "where the identity key and the paired-device list live",
+        ))]
         data_dir: Option<PathBuf>,
-        /// 启动即开配对窗口(默认仅在白名单为空时自动开)
-        #[arg(long)]
+        #[arg(long, help = t(
+            "启动即开配对窗口(默认仅在白名单为空时自动开)",
+            "open a pairing window right away (by default one opens only while nothing is paired yet)",
+        ))]
         pair: bool,
-        /// 已配对设备的代理流转发目标(dsh web 地址);不配则拒绝代理流
-        #[arg(long)]
+        #[arg(long, help = t(
+            "已配对设备的代理流转发目标(dsh web 地址);不配则拒绝代理流",
+            "where to forward proxy streams from paired devices (the dsh web address); without it they are refused",
+        ))]
         proxy_target: Option<std::net::SocketAddr>,
     },
-    /// 手机端替身:连接 host,打印审批请求并按策略应答
+    #[command(about = t(
+        "手机端替身:连接 host,打印审批请求并按策略应答",
+        "phone stand-in: connects to a host, prints approval requests and answers them by policy",
+    ))]
     PhoneSim {
-        /// 本地起代理监听,经 host 的代理流访问其 dsh web(如 127.0.0.1:17380)
-        #[arg(long)]
+        #[arg(long, help = t(
+            "本地起代理监听,经 host 的代理流访问其 dsh web(如 127.0.0.1:17380)",
+            "listen here and reach the host's dsh web over a proxy stream (e.g. 127.0.0.1:17380)",
+        ))]
         proxy_listen: Option<std::net::SocketAddr>,
-        /// host 的设备 ID
-        #[arg(long)]
+        #[arg(long, help = t("host 的设备 ID", "the host's device ID"))]
         peer: String,
-        /// 配对码(首次连接用;已配对则省略)
-        #[arg(long)]
+        #[arg(long, help = t(
+            "配对码(首次连接用;已配对则省略)",
+            "pairing code (only for the first connection; omit once paired)",
+        ))]
         code: Option<String>,
-        /// 设备名(配对时登记)
-        #[arg(long, default_value = "phone-sim")]
+        #[arg(long, default_value = "phone-sim", help = t(
+            "设备名(配对时登记)",
+            "device name, as recorded when pairing",
+        ))]
         name: String,
-        /// 收到审批后的应答策略
-        #[arg(long, value_parser = ["allow", "reject"], default_value = "allow")]
+        #[arg(long, value_parser = ["allow", "reject"], default_value = "allow", help = t(
+            "收到审批后的应答策略",
+            "how to answer an approval request",
+        ))]
         auto: String,
-        /// 应答前延迟毫秒(模拟人掏手机)
-        #[arg(long, default_value_t = 2000)]
+        #[arg(long, default_value_t = 2000, help = t(
+            "应答前延迟毫秒(模拟人掏手机)",
+            "milliseconds to wait before answering, as if reaching for the phone",
+        ))]
         delay: u64,
-        #[arg(long)]
+        #[arg(long, help = t(
+            "身份与配对记录目录",
+            "where the identity key and the pairing record live",
+        ))]
         data_dir: Option<PathBuf>,
     },
-    /// 打印 host 身份 ID
+    #[command(about = t("打印 host 身份 ID", "print the host's identity ID"))]
     Id {
-        #[arg(long)]
+        #[arg(long, help = t(
+            "身份与配对白名单目录",
+            "where the identity key and the paired-device list live",
+        ))]
         data_dir: Option<PathBuf>,
     },
 }
@@ -168,8 +215,9 @@ struct HostState {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // 先定语言再 parse:--help 是 parse 里渲染的,等 cli.lang 到手就晚了
+    set_lang(lang_from_argv().as_deref());
     let cli = Cli::parse();
-    set_lang(cli.lang.as_deref());
     match cli.cmd {
         Cmd::Id { data_dir } => {
             let dir = data_dir.unwrap_or_else(default_data_dir);
