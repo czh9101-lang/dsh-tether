@@ -24,12 +24,34 @@ use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::sync::{mpsc, Mutex};
 
+/// 人读日志的语言。插件启动 sidecar 时按电脑的系统语言传 --lang,两边始终一致;
+/// 直接手跑时按 LC_ALL/LANG 猜,猜不到按中文(与历来行为一致)。
+static ENGLISH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+fn set_lang(explicit: Option<&str>) {
+    let tag = explicit
+        .map(str::to_string)
+        .or_else(|| std::env::var("LC_ALL").ok())
+        .or_else(|| std::env::var("LANG").ok())
+        .unwrap_or_else(|| "zh".to_string());
+    let english = !tag.trim().to_ascii_lowercase().starts_with("zh");
+    ENGLISH.store(english, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// 同一句话的两种写法,按当前语言取一个
+fn t(zh: &'static str, en: &'static str) -> &'static str {
+    if ENGLISH.load(std::sync::atomic::Ordering::Relaxed) { en } else { zh }
+}
+
 const PAIRING_TTL: Duration = Duration::from_secs(600);
 const PAIRING_MAX_ATTEMPTS: u32 = 3;
 
 #[derive(Parser)]
 #[command(name = "tether-host", about = "dsh 审批遥控:电脑侧 iroh 端(插件 sidecar)与手机模拟端")]
 struct Cli {
+    /// 人读日志的语言(zh / en);不给则看 LC_ALL、LANG
+    #[arg(long, global = true)]
+    lang: Option<String>,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -153,7 +175,9 @@ struct HostState {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    match Cli::parse().cmd {
+    let cli = Cli::parse();
+    set_lang(cli.lang.as_deref());
+    match cli.cmd {
         Cmd::Id { data_dir } => {
             let dir = data_dir.unwrap_or_else(default_data_dir);
             let secret = load_or_create_secret(&dir.join("identity.key"))?;
@@ -238,7 +262,7 @@ async fn host_main(data_dir: PathBuf, force_pair: bool, proxy_target: Option<std
         .alpns(vec![ALPN.to_vec()])
         .bind()
         .await
-        .context("iroh endpoint 启动失败")?;
+        .context(t("iroh endpoint 启动失败", "failed to start the iroh endpoint"))?;
     emit(&PluginOut::Ready { endpoint_id: ep.id().to_string() });
 
     let mut state = HostState { store_path, store, pairing: None, conns: HashMap::new(), proxy_auth: None };
@@ -260,7 +284,7 @@ async fn host_main(data_dir: PathBuf, force_pair: bool, proxy_target: Option<std
                 let state = state.clone();
                 tokio::spawn(async move {
                     if let Err(e) = handle_phone(incoming, state, proxy_target).await {
-                        eprintln!("[host] 入站连接处理失败: {e:#}");
+                        eprintln!("[host] {}{e:#}", t("入站连接处理失败: ", "inbound connection failed: "));
                     }
                 });
             }
@@ -276,7 +300,7 @@ async fn stdin_loop(state: Arc<Mutex<HostState>>) {
         let msg: PluginIn = match serde_json::from_str(&line) {
             Ok(m) => m,
             Err(e) => {
-                eprintln!("[host] 无法解析插件消息: {e}: {line}");
+                eprintln!("[host] {}{e}: {line}", t("无法解析插件消息: ", "cannot parse the plugin message: "));
                 continue;
             }
         };
@@ -304,7 +328,7 @@ async fn stdin_loop(state: Arc<Mutex<HostState>>) {
                 s.store.devices.retain(|d| d.id != id);
                 let (path, store) = (s.store_path.clone(), &s.store);
                 if let Err(e) = save_store(&path, store) {
-                    eprintln!("[host] 写入配对白名单失败: {e:#}");
+                    eprintln!("[host] {}{e:#}", t("写入配对白名单失败: ", "cannot write the paired-device list: "));
                 }
                 // 移出白名单只挡下次连接。此刻正连着的那条必须主动断,
                 // 否则「移除」在设备下线前完全不生效。
@@ -317,11 +341,11 @@ async fn stdin_loop(state: Arc<Mutex<HostState>>) {
                 // 这两个值会被拼进转发的请求头;插件是可信父进程,但这是进程
                 // 边界,控制字符(CRLF 注入)在这里挡一道
                 if cookie.bytes().chain(authority.bytes()).any(|b| b < 0x20 || b == 0x7f) {
-                    eprintln!("[host] proxy-auth 含控制字符,已丢弃");
+                    eprintln!("[host] {}", t("proxy-auth 含控制字符,已丢弃", "the proxy-auth value has control characters; dropped"));
                     continue;
                 }
                 state.lock().await.proxy_auth = Some(Arc::new(ProxyAuth { cookie, authority }));
-                eprintln!("[host] 已装载浏览器认证 cookie,代理流将逐请求注入");
+                eprintln!("[host] {}", t("已装载浏览器认证 cookie,代理流将逐请求注入", "browser auth cookie loaded; it will be injected per request on proxy streams"));
             }
         }
     }
@@ -352,18 +376,18 @@ async fn handle_phone(
     state: Arc<Mutex<HostState>>,
     proxy_target: Option<std::net::SocketAddr>,
 ) -> Result<()> {
-    let conn = incoming.await.context("接受连接失败")?;
+    let conn = incoming.await.context(t("接受连接失败", "failed to accept the connection"))?;
     let remote = conn.remote_id().to_string();
     let paired = { state.lock().await.store.devices.iter().any(|d| d.id == remote) };
-    let (mut send, mut recv) = conn.accept_bi().await.context("接受控制流失败")?;
+    let (mut send, mut recv) = conn.accept_bi().await.context(t("接受控制流失败", "failed to accept the control stream"))?;
 
     let first = tokio::time::timeout(
         Duration::from_secs(15),
         read_line_bounded(&mut recv, if paired { MAX_LINE } else { MAX_UNPAIRED_LINE }),
     )
     .await
-    .context("等待首行超时")??;
-    let hello: Wire = serde_json::from_str(&first).context("首行不是合法消息")?;
+    .context(t("等待首行超时", "timed out waiting for the first line"))??;
+    let hello: Wire = serde_json::from_str(&first).context(t("首行不是合法消息", "the first line is not a valid message"))?;
 
     let device_name = match (paired, hello) {
         (true, Wire::Hello { name }) => name,
@@ -387,7 +411,7 @@ async fn handle_phone(
                         paired_at: chrono_now(),
                     });
                     let (path, store) = (s.store_path.clone(), &s.store);
-                    save_store(&path, store).context("写入配对白名单失败")?;
+                    save_store(&path, store).context(t("写入配对白名单失败", "cannot write the paired-device list"))?;
                     emit(&PluginOut::PairingDone { peer: remote.clone(), name: name.clone() });
                     drop(s);
                     write_line(&mut send, &serde_json::to_string(&Wire::PairOk)?).await?;
@@ -411,7 +435,7 @@ async fn handle_phone(
         }
         _ => {
             conn.close(1u8.into(), b"protocol");
-            bail!("未按协议发首行(paired={paired})");
+            bail!("{}(paired={paired})", t("未按协议发首行", "the first line does not follow the protocol"));
         }
     };
 
@@ -461,8 +485,8 @@ async fn handle_phone(
             match read_line_bounded(&mut recv, MAX_LINE).await {
                 Ok(line) => match serde_json::from_str::<Wire>(&line) {
                     Ok(Wire::Decision { id, outcome }) => emit(&PluginOut::Decision { id, outcome }),
-                    Ok(_) => eprintln!("[host] 忽略非决定消息: {line}"),
-                    Err(e) => eprintln!("[host] 无法解析手机消息: {e}"),
+                    Ok(_) => eprintln!("[host] {}{line}", t("忽略非决定消息: ", "ignoring a non-decision message: ")),
+                    Err(e) => eprintln!("[host] {}{e}", t("无法解析手机消息: ", "cannot parse the phone message: ")),
                 },
                 Err(_) => break,
             }
@@ -482,7 +506,7 @@ async fn handle_phone(
                 emit(&PluginOut::ProxyOpened);
             }
             let Some(target) = proxy_target else {
-                eprintln!("[host] 未配置 --proxy-target,拒绝代理流");
+                eprintln!("[host] {}", t("未配置 --proxy-target,拒绝代理流", "no --proxy-target configured; refusing the proxy stream"));
                 continue;
             };
             let permit = permits.clone().acquire_owned().await.expect("semaphore 不会关闭");
@@ -501,13 +525,13 @@ async fn handle_phone(
                     Some(auth) => match read_request_head(&mut precv).await {
                         Ok(head) => Some(rewrite_request_head(&head, auth)),
                         Err(e) => {
-                            eprintln!("[host] 代理流请求头读取失败: {e:#}");
+                            eprintln!("[host] {}{e:#}", t("代理流请求头读取失败: ", "cannot read the proxy request head: "));
                             return;
                         }
                     },
                 };
                 let Ok(mut tcp) = tokio::net::TcpStream::connect(target).await else {
-                    eprintln!("[host] 代理流无法连接 {target}(dsh web 未启动?)");
+                    eprintln!("[host] {}{target}{}", t("代理流无法连接 ", "the proxy stream cannot reach "), t("(dsh web 未启动?)", " (is dsh web running?)"));
                     return;
                 };
                 if let Some(head) = head {
@@ -549,12 +573,12 @@ async fn phone_sim_main(
     delay: u64,
     proxy_listen: Option<std::net::SocketAddr>,
 ) -> Result<()> {
-    let peer: EndpointId = peer.trim().parse().map_err(|e| anyhow::anyhow!("无效的 --peer 设备 ID: {e}"))?;
+    let peer: EndpointId = peer.trim().parse().map_err(|e| anyhow::anyhow!("{}{e}", t("无效的 --peer 设备 ID: ", "invalid --peer device ID: ")))?;
     let secret = load_or_create_secret(&data_dir.join("identity.key"))?;
     let ep = endpoint_builder().secret_key(secret).bind().await?;
-    eprintln!("[phone-sim] 本机 ID: {}", ep.id());
-    let conn = ep.connect(peer, ALPN).await.context("连接 host 失败")?;
-    let (mut send, mut recv) = conn.open_bi().await.context("打开控制流失败")?;
+    eprintln!("[phone-sim] {}{}", t("本机 ID: ", "local ID: "), ep.id());
+    let conn = ep.connect(peer, ALPN).await.context(t("连接 host 失败", "failed to connect to the host"))?;
+    let (mut send, mut recv) = conn.open_bi().await.context(t("打开控制流失败", "failed to open the control stream"))?;
 
     let first = match &code {
         Some(code) => Wire::Pair { code: code.clone(), name: name.clone() },
@@ -564,17 +588,17 @@ async fn phone_sim_main(
     if code.is_some() {
         let resp = read_line_bounded(&mut recv, MAX_LINE).await?;
         match serde_json::from_str::<Wire>(&resp)? {
-            Wire::PairOk => eprintln!("[phone-sim] 配对成功"),
-            Wire::PairFail { reason } => bail!("配对失败: {reason}"),
-            _ => bail!("配对应答不符合协议: {resp}"),
+            Wire::PairOk => eprintln!("[phone-sim] {}", t("配对成功", "paired")),
+            Wire::PairFail { reason } => bail!("{}{reason}", t("配对失败: ", "pairing failed: ")),
+            _ => bail!("{}{resp}", t("配对应答不符合协议: ", "the pairing reply does not follow the protocol: ")),
         }
     }
-    eprintln!("[phone-sim] 已连接,应答策略 {auto}(延迟 {delay}ms),等待审批请求…");
+    eprintln!("[phone-sim] {}{auto}({delay}ms){}", t("已连接,应答策略 ", "connected, reply policy "), t(",等待审批请求…", ", waiting for approval requests…"));
 
     if let Some(listen) = proxy_listen {
         let listener = tokio::net::TcpListener::bind(listen)
             .await
-            .with_context(|| format!("本地代理监听失败: {listen}"))?;
+            .with_context(|| format!("{}{listen}", t("本地代理监听失败: ", "the local proxy could not listen on ")))?;
         eprintln!("[phone-sim] 代理就绪: http://{listen} → [iroh] → host 的 dsh web");
         let pconn = conn.clone();
         tokio::spawn(async move {
@@ -596,20 +620,20 @@ async fn phone_sim_main(
     loop {
         let line = tokio::select! {
             r = read_line_bounded(&mut recv, MAX_LINE) => r?,
-            reason = conn.closed() => bail!("连接断开: {reason}"),
+            reason = conn.closed() => bail!("{}{reason}", t("连接断开: ", "connection closed: ")),
             _ = tokio::signal::ctrl_c() => break,
         };
         match serde_json::from_str::<Wire>(&line)? {
             Wire::Approval { id, tool_name, reason } => {
-                eprintln!("[phone-sim] 审批请求 id={id} tool={tool_name}");
-                eprintln!("[phone-sim]   理由: {reason}");
+                eprintln!("[phone-sim] {}id={id} tool={tool_name}", t("审批请求 ", "approval request "));
+                eprintln!("[phone-sim]   {}{reason}", t("理由: ", "reason: "));
                 tokio::time::sleep(Duration::from_millis(delay)).await;
                 let outcome = if auto == "allow" { "allowed-once" } else { "rejected" };
-                eprintln!("[phone-sim] 应答: {outcome}");
+                eprintln!("[phone-sim] {}{outcome}", t("应答: ", "replied: "));
                 write_line(&mut send, &serde_json::to_string(&Wire::Decision { id, outcome: outcome.into() })?).await?;
             }
-            Wire::ApprovalCancel { id } => eprintln!("[phone-sim] 审批已取消 id={id}"),
-            _ => eprintln!("[phone-sim] 忽略消息: {line}"),
+            Wire::ApprovalCancel { id } => eprintln!("[phone-sim] {}id={id}", t("审批已取消 ", "approval cancelled ")),
+            _ => eprintln!("[phone-sim] {}{line}", t("忽略消息: ", "ignoring message: ")),
         }
     }
     ep.close().await;

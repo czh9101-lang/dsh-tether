@@ -48,8 +48,18 @@ class DshLocalService : Service() {
     if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
     if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-    val channel = NotificationChannel(CHANNEL_ID, "本机 DSH 运行中", NotificationManager.IMPORTANCE_LOW)
-    channel.description = "本地模式运行时的常驻通知;关掉它系统可能会在后台结束 DSH"
+    // 渠道名与说明出现在系统的通知设置里,由系统显示,所以按系统语言取
+    val zh = java.util.Locale.getDefault().language == "zh"
+    val channel = NotificationChannel(
+      CHANNEL_ID,
+      if (zh) "本机 DSH 运行中" else "DSH running on this phone",
+      NotificationManager.IMPORTANCE_LOW,
+    )
+    channel.description = if (zh) {
+      "本地模式运行时的常驻通知;关掉它系统可能会在后台结束 DSH"
+    } else {
+      "The ongoing notification shown while local mode runs; turning it off lets the system stop DSH in the background"
+    }
     channel.setShowBadge(false)
     manager.createNotificationChannel(channel)
   }
