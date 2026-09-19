@@ -7,8 +7,10 @@ use std::path::PathBuf;
 
 #[cfg(target_os = "android")]
 mod local;
+mod i18n;
 
 use anyhow::{bail, Context as _, Result};
+use i18n::t;
 use iroh::endpoint::presets;
 use iroh::{Endpoint, EndpointId};
 use tether_core::{
@@ -65,7 +67,7 @@ struct ApprovalEvent {
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf> {
-    app.path().app_data_dir().context("取不到应用数据目录")
+    app.path().app_data_dir().context(t("取不到应用数据目录", "cannot locate the app data directory"))
 }
 
 fn host_book_path(app: &AppHandle) -> Result<PathBuf> {
@@ -111,7 +113,7 @@ async fn get_or_init_endpoint(app: &AppHandle, state: &AppState) -> Result<Endpo
         .secret_key(secret)
         .bind()
         .await
-        .context("iroh endpoint 启动失败")?;
+        .context(t("iroh endpoint 启动失败", "failed to start the iroh endpoint"))?;
     *guard = Some(ep.clone());
     Ok(ep)
 }
@@ -122,7 +124,7 @@ async fn run_connection(app: AppHandle, peer: EndpointId, first: Wire, pair_labe
     if let Err(e) = run_connection_inner(&app, peer, first, pair_label).await {
         emit_state(&app, "disconnected", format!("{e:#}"));
     } else {
-        emit_state(&app, "disconnected", "连接已断开");
+        emit_state(&app, "disconnected", t("连接已断开", "Connection closed"));
     }
     let state = app.state::<AppState>();
     *state.outgoing.lock().await = None;
@@ -134,21 +136,21 @@ async fn run_connection_inner(
     first: Wire,
     pair_label: Option<String>,
 ) -> Result<()> {
-    emit_state(app, "connecting", "正在连接主机…");
+    emit_state(app, "connecting", t("正在连接主机…", "Connecting to the computer…"));
     let state = app.state::<AppState>();
     let ep = get_or_init_endpoint(app, &state).await?;
     let conn = ep
         .connect(peer, ALPN)
         .await
-        .context("连不上主机(插件未运行、ID 不对或网络不可达)")?;
-    let (mut send, mut recv) = conn.open_bi().await.context("打开控制流失败")?;
+        .context(t("连不上主机(插件未运行、ID 不对或网络不可达)", "cannot reach the computer (plugin not running, wrong ID, or no route)"))?;
+    let (mut send, mut recv) = conn.open_bi().await.context(t("打开控制流失败", "failed to open the control stream"))?;
 
     let pairing = matches!(first, Wire::Pair { .. });
     write_line(&mut send, &serde_json::to_string(&first)?).await?;
     if pairing {
         let resp = read_line_bounded(&mut recv, MAX_LINE)
             .await
-            .context("配对被主机拒绝(配对码错误或窗口已关闭)")?;
+            .context(t("配对被主机拒绝(配对码错误或窗口已关闭)", "the computer refused the pairing (wrong code, or its window is gone)"))?;
         match serde_json::from_str::<Wire>(&resp)? {
             Wire::PairOk => {
                 let id = peer.to_string();
@@ -161,8 +163,8 @@ async fn run_connection_inner(
                 book.current = Some(id);
                 save_book(app, &book)?;
             }
-            Wire::PairFail { reason } => bail!("配对失败: {reason}"),
-            _ => bail!("配对应答不符合协议"),
+            Wire::PairFail { reason } => bail!("{}{reason}", t("配对失败: ", "pairing failed: ")),
+            _ => bail!("{}", t("配对应答不符合协议", "the pairing reply does not follow the protocol")),
         }
     }
 
@@ -176,9 +178,9 @@ async fn run_connection_inner(
             *state.proxy_port.lock().await = Some(port);
             let _ = app.emit("remote:proxy-ready", serde_json::json!({ "url": format!("http://127.0.0.1:{port}/") }));
         }
-        Err(e) => emit_state(app, "connecting", format!("代理启动失败: {e:#}")),
+        Err(e) => emit_state(app, "connecting", format!("{}{e:#}", t("代理启动失败: ", "proxy failed to start: "))),
     }
-    emit_state(app, "connected", "已连接");
+    emit_state(app, "connected", t("已连接", "Connected"));
 
     let writer = async {
         while let Some(msg) = rx.recv().await {
@@ -229,7 +231,7 @@ async fn start_proxy(app: AppHandle, conn: iroh::endpoint::Connection) -> Result
         Ok(listener) => listener,
         Err(_) => tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
-            .context("本地代理监听失败")?,
+            .context(t("本地代理监听失败", "the local proxy could not listen"))?,
     };
     let port = listener.local_addr()?.port();
     tauri::async_runtime::spawn(async move {
@@ -252,12 +254,18 @@ async fn start_proxy(app: AppHandle, conn: iroh::endpoint::Connection) -> Result
 }
 
 fn parse_peer(peer: &str) -> Result<EndpointId, String> {
-    peer.trim().parse().map_err(|e| format!("主机 ID 无效: {e}"))
+    peer.trim().parse().map_err(|e| format!("{}{e}", t("主机 ID 无效: ", "invalid computer ID: ")))
 }
 
 #[tauri::command]
 fn list_hosts(app: AppHandle) -> HostBook {
     load_book(&app)
+}
+
+/// 界面把系统语言报进来,Rust 侧的报错文案照它出中文或英文
+#[tauri::command]
+fn set_lang(tag: String) {
+    i18n::set_from_tag(&tag);
 }
 
 /// 构建时写死的版本号,避免界面上再手抄一份而漂移
@@ -271,7 +279,7 @@ fn app_version() -> &'static str {
 fn rename_host(app: AppHandle, id: String, label: String) -> Result<HostBook, String> {
     let mut book = load_book(&app);
     let Some(host) = book.hosts.iter_mut().find(|h| h.id == id) else {
-        return Err("这台电脑不在已配对列表里".into());
+        return Err(t("这台电脑不在已配对列表里", "that computer is not in the paired list").into());
     };
     host.label = label.trim().to_string();
     save_book(&app, &book).map_err(|e| format!("{e:#}"))?;
@@ -300,9 +308,9 @@ async fn pair(
     let peer = parse_peer(&peer)?;
     let code = code.trim().to_string();
     if code.len() != 6 || !code.chars().all(|c| c.is_ascii_digit()) {
-        return Err("配对码应为 6 位数字".into());
+        return Err(t("配对码应为 6 位数字", "the pairing code must be 6 digits").into());
     }
-    let name = if name.trim().is_empty() { "我的手机".to_string() } else { name.trim().to_string() };
+    let name = if name.trim().is_empty() { t("我的手机", "My phone").to_string() } else { name.trim().to_string() };
     tauri::async_runtime::spawn(run_connection(
         app,
         peer,
@@ -318,17 +326,17 @@ async fn connect(app: AppHandle, id: Option<String>) -> Result<(), String> {
     let mut book = load_book(&app);
     let target = id.or_else(|| book.current.clone()).or_else(|| book.hosts.first().map(|h| h.id.clone()));
     let Some(target) = target else {
-        return Err("还没有配对过的电脑".into());
+        return Err(t("还没有配对过的电脑", "no computer has been paired yet").into());
     };
     if !book.hosts.iter().any(|h| h.id == target) {
-        return Err("这台电脑不在已配对列表里".into());
+        return Err(t("这台电脑不在已配对列表里", "that computer is not in the paired list").into());
     }
     if book.current.as_deref() != Some(target.as_str()) {
         book.current = Some(target.clone());
         save_book(&app, &book).map_err(|e| format!("{e:#}"))?;
     }
     let peer = parse_peer(&target)?;
-    let name = "我的手机".to_string();
+    let name = t("我的手机", "My phone").to_string();
     tauri::async_runtime::spawn(run_connection(app, peer, Wire::Hello { name }, None));
     Ok(())
 }
@@ -381,7 +389,7 @@ async fn local_start(app: AppHandle) -> Result<String, String> {
         let (host, url) = local::start(&app).await.map_err(|e| format!("{e:#}"))?;
         *guard = Some(host);
         // 前台通知让系统别在退后台时收掉进程;起不来只影响保活,不影响使用
-        if let Err(e) = tauri_plugin_dshlocal::start_service(&app, "DSH Tether", "本机 DSH 运行中") {
+        if let Err(e) = tauri_plugin_dshlocal::start_service(&app, "DSH Tether", t("本机 DSH 运行中", "DSH is running on this phone")) {
             eprintln!("[local] 前台服务启动失败: {e}");
         }
         Ok(url)
@@ -389,7 +397,7 @@ async fn local_start(app: AppHandle) -> Result<String, String> {
     #[cfg(not(target_os = "android"))]
     {
         let _ = app;
-        Err("这个平台没有本地模式".into())
+        Err(t("这个平台没有本地模式", "this platform has no local mode").into())
     }
 }
 
@@ -442,6 +450,7 @@ pub fn run() {
             pair,
             connect,
             app_version,
+            set_lang,
             local_status,
             local_start,
             local_stop,

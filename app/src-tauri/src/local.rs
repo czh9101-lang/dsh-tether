@@ -11,6 +11,7 @@ use std::process::Stdio;
 use std::sync::Arc;
 
 use anyhow::{bail, Context as _, Result};
+use crate::i18n::t;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tether_core::{read_request_head, rewrite_request_head, ProxyAuth};
@@ -61,19 +62,19 @@ struct Layout {
 }
 
 fn layout() -> Result<Layout> {
-    let maps = std::fs::read_to_string("/proc/self/maps").context("读不到 /proc/self/maps")?;
+    let maps = std::fs::read_to_string("/proc/self/maps").context(t("读不到 /proc/self/maps", "cannot read /proc/self/maps"))?;
     let native_lib_dir = maps
         .lines()
         .filter_map(|line| line.split_whitespace().nth(5))
         .find(|path| path.ends_with(SELF_LIB))
         .and_then(|path| Path::new(path).parent().map(Path::to_path_buf))
-        .context("映射表里找不到本应用的原生库目录")?;
+        .context(t("映射表里找不到本应用的原生库目录", "the app native library directory is not in the memory map"))?;
     let apk = native_lib_dir
         .parent()
         .and_then(Path::parent)
         .map(|install| install.join("base.apk"))
         .filter(|p| p.is_file())
-        .context("原生库目录旁找不到 base.apk")?;
+        .context(t("原生库目录旁找不到 base.apk", "no base.apk next to the native library directory"))?;
     Ok(Layout { native_lib_dir, apk })
 }
 
@@ -87,7 +88,7 @@ pub fn available() -> bool {
 }
 
 fn data_dir(app: &AppHandle) -> Result<PathBuf> {
-    app.path().app_data_dir().context("取不到应用数据目录")
+    app.path().app_data_dir().context(t("取不到应用数据目录", "cannot locate the app data directory"))
 }
 
 fn runtime_dir(app: &AppHandle) -> Result<PathBuf> {
@@ -118,21 +119,21 @@ fn extract_runtime(app: &AppHandle, apk: &Path, dir: &Path) -> Result<()> {
     let tmp = dir.with_extension("extracting");
     let _ = std::fs::remove_dir_all(&tmp);
     std::fs::create_dir_all(&tmp)?;
-    let file = std::fs::File::open(apk).context("打不开 APK")?;
-    let mut zip = zip::ZipArchive::new(file).context("APK 不是有效的 zip")?;
-    let entry = zip.by_name(RUNTIME_ASSET).context("APK 里没有运行时,这个构建不含本地模式")?;
+    let file = std::fs::File::open(apk).context(t("打不开 APK", "cannot open the APK"))?;
+    let mut zip = zip::ZipArchive::new(file).context(t("APK 不是有效的 zip", "the APK is not a valid zip"))?;
+    let entry = zip.by_name(RUNTIME_ASSET).context(t("APK 里没有运行时,这个构建不含本地模式", "the APK carries no runtime; this build has no local mode"))?;
     let mut archive = tar::Archive::new(entry);
     let mut count = 0usize;
-    for item in archive.entries().context("运行时 tar 损坏")? {
+    for item in archive.entries().context(t("运行时 tar 损坏", "the runtime archive is damaged"))? {
         let mut item = item?;
         item.unpack_in(&tmp)?;
         count += 1;
         if count % 1000 == 0 {
-            emit(app, "extracting", format!("正在解压运行时… {count} 个文件"));
+            emit(app, "extracting", format!("{}{count}", t("正在解压运行时… 已解出 ", "Unpacking the runtime… files so far: ")));
         }
     }
     let _ = std::fs::remove_dir_all(dir);
-    std::fs::rename(&tmp, dir).context("运行时目录改名失败")?;
+    std::fs::rename(&tmp, dir).context(t("运行时目录改名失败", "cannot rename the runtime directory"))?;
     Ok(())
 }
 
@@ -167,7 +168,7 @@ fn parse_ready_line(line: &str) -> Option<(u16, String)> {
 
 /// 拿启动 token 换认证 cookie:GET /?token= 回 303 + set-cookie。只要 name=value。
 async fn exchange_cookie(port: u16, token: &str) -> Result<String> {
-    let mut tcp = TcpStream::connect(("127.0.0.1", port)).await.context("连不上本机 dsh")?;
+    let mut tcp = TcpStream::connect(("127.0.0.1", port)).await.context(t("连不上本机 dsh", "cannot reach the local dsh"))?;
     let req = format!("GET /?token={token} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n");
     tcp.write_all(req.as_bytes()).await?;
     let mut buf = Vec::with_capacity(4096);
@@ -190,7 +191,7 @@ async fn exchange_cookie(port: u16, token: &str) -> Result<String> {
             }
         }
     }
-    bail!("dsh 没有下发认证 cookie(应答首行:{})", head.lines().next().unwrap_or_default())
+    bail!("{}{}", t("dsh 没有下发认证 cookie,应答首行:", "dsh returned no auth cookie; first response line: "), head.lines().next().unwrap_or_default())
 }
 
 /// 本地注入代理:每条入站 TCP 读完请求头改写(Host、cookie、Connection: close),
@@ -236,17 +237,17 @@ pub async fn start(app: &AppHandle) -> Result<(LocalHost, String)> {
     let layout = layout()?;
     let node = node_binary(&layout);
     if !node.is_file() {
-        bail!("这个构建不含本地运行时");
+        bail!("{}", t("这个构建不含本地运行时", "this build carries no local runtime"));
     }
     let runtime = runtime_dir(app)?;
     if !runtime_ready(&layout.apk, &runtime) {
-        emit(app, "extracting", "首次使用,正在解压运行时…");
+        emit(app, "extracting", t("首次使用,正在解压运行时…", "First run: unpacking the runtime…"));
         let app2 = app.clone();
         let apk = layout.apk.clone();
         let dir = runtime.clone();
         tauri::async_runtime::spawn_blocking(move || extract_runtime(&app2, &apk, &dir))
             .await
-            .context("解压任务中断")??;
+            .context(t("解压任务中断", "the unpacking task was interrupted"))??;
     }
     let data = data_dir(app)?;
     let home = data.join("dsh-home");
@@ -254,7 +255,7 @@ pub async fn start(app: &AppHandle) -> Result<(LocalHost, String)> {
     let tmp = data.join("tmp");
     std::fs::create_dir_all(&tmp)?;
 
-    emit(app, "starting", "正在启动本机 DSH…");
+    emit(app, "starting", t("正在启动本机 DSH…", "Starting DSH on this phone…"));
     let bin_js = runtime.join("app").join("node_modules").join("@deepseek-ai").join("dsh").join("lib").join("bin.js");
     let mut child = Command::new(&node)
         // cordis 加载器先试 --expose-internals 取内部模块加载器,有了它就不需要
@@ -274,10 +275,10 @@ pub async fn start(app: &AppHandle) -> Result<(LocalHost, String)> {
         .stderr(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
-        .context("起不了 node")?;
+        .context(t("起不了 node", "cannot start node"))?;
     let log = Arc::new(Mutex::new(VecDeque::new()));
-    let stdout = child.stdout.take().context("拿不到 stdout")?;
-    let stderr = child.stderr.take().context("拿不到 stderr")?;
+    let stdout = child.stdout.take().context(t("拿不到 stdout", "cannot capture stdout"))?;
+    let stderr = child.stderr.take().context(t("拿不到 stderr", "cannot capture stderr"))?;
     {
         let log = log.clone();
         tauri::async_runtime::spawn(async move {
@@ -302,10 +303,10 @@ pub async fn start(app: &AppHandle) -> Result<(LocalHost, String)> {
         Ok(Ok(Some(found))) => found,
         Ok(Ok(None)) => {
             let tail = log.lock().await.iter().rev().take(8).cloned().collect::<Vec<_>>();
-            bail!("本机 DSH 启动失败:{}", tail.into_iter().rev().collect::<Vec<_>>().join(" | "))
+            bail!("{}{}", t("本机 DSH 启动失败:", "DSH failed to start on this phone: "), tail.into_iter().rev().collect::<Vec<_>>().join(" | "))
         }
-        Ok(Err(e)) => bail!("读取 DSH 输出失败:{e:#}"),
-        Err(_) => bail!("本机 DSH 90 秒内未就绪"),
+        Ok(Err(e)) => bail!("{}{e:#}", t("读取 DSH 输出失败:", "cannot read the DSH output: ")),
+        Err(_) => bail!("{}", t("本机 DSH 90 秒内未就绪", "DSH did not become ready within 90 seconds")),
     };
     {
         let log = log.clone();

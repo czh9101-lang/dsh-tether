@@ -393,6 +393,8 @@ async function stopLocal() {
 // —— 启动 ——
 
 async function boot() {
+  // Rust 侧的报错也会显示在界面上,先把语言告诉它再做别的
+  await invoke('set_lang', { tag: navigator.language || '' }).catch(() => {})
   await listen('remote:state', (e) => onState(e.payload))
   await listen('remote:proxy-ready', (e) => showWebUi(e.payload.url))
   await listen('remote:approval', (e) => notifyApproval(e.payload))
