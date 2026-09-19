@@ -17,7 +17,7 @@
   <a href="../../releases"><img src="https://img.shields.io/github/downloads/zexadev/dsh-tether/total?style=flat&label=downloads&color=4D6BFE" alt="Downloads"></a>
   <a href="../../stargazers"><img src="https://img.shields.io/github/stars/zexadev/dsh-tether?style=flat&label=%E2%98%85&color=08C" alt="Stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/dsh-0.1.0--rc.7%20%7C%20rc.8%20%7C%200.1.2%20%7C%200.1.5--alpha-4D6BFE?style=flat" alt="dsh 0.1.0-rc.7 | rc.8 | 0.1.2 | 0.1.5-alpha">
+  <img src="https://img.shields.io/badge/dsh-0.1.0--rc.7%20%7C%20rc.8%20%7C%200.1.2%20%7C%200.1.5-4D6BFE?style=flat" alt="dsh 0.1.0-rc.7 | rc.8 | 0.1.2 | 0.1.5">
   <img src="https://img.shields.io/badge/Android-4493F8?style=flat" alt="Android">
   <img src="https://img.shields.io/badge/iOS-beta-8E8E93?style=flat" alt="iOS beta">
   <a href="https://www.dsh.so/artifact/dsh-tether"><img src="https://www.dsh.so/badge/dsh-tether.svg" alt="dsh.so security scan"></a>
@@ -87,10 +87,10 @@ From then on the app connects by itself when you open it.
 
 Open the app → **Hosts** in the top bar → **Run on this phone**. The first start unpacks the runtime first (about 9 seconds measured); after that the DSH interface appears in about 2 seconds. Enter an API key in Settings and start talking.
 
-- **Install and go**: no Termux, no terminal, no commands, no root. Node 24 and the full dependency tree of dsh `0.1.2-rc.1` ship inside the APK and unpack offline on first start; after that only model API calls need the network.
+- **Install and go**: no Termux, no terminal, no commands, no root. Node 24 and the full dependency tree of dsh `0.1.5-rc.2` ship inside the APK and unpack offline on first start; after that only model API calls need the network.
 - **No pairing**: dsh is on this phone, there is no remote end. Sessions, settings and workspaces live only on the phone and are entirely separate from what you see when connected to a machine; switching back and forth touches neither.
 - **Stays up**: while running there is a persistent notification (a foreground service), so backgrounding or locking the screen does not get the process reclaimed. If the process is killed anyway, the next launch restarts it; sessions are already on disk.
-- **Versioned with the app**: the bundled dsh upgrades with the app; currently `0.1.2-rc.1`.
+- **Versioned with the app**: the bundled dsh upgrades with the app; currently `0.1.5-rc.2`.
 - Only the `arm64` APK carries local mode; iOS forbids child processes, so the iOS build has no such entry.
 - The phone has no bash and no full coreutils, so shell-dependent tools are incomplete; chat and file read/write are unaffected.
 
@@ -136,7 +136,7 @@ The Termux route still works if you prefer it: install dsh and this plugin insid
 - The app connects when you open it and holds no background connection — Android's doze would not let it anyway.
 - The interface on the phone is DSH's own; the narrow-screen fit comes from minimal injected styles, so a dsh layout change may need a follow-up here.
 - Local mode exists only in the `arm64` build, never on iOS; the phone lacks bash and a full coreutils, so shell-dependent tools are incomplete. The `arm64` APK is about 71 MB because of the bundled runtime; the others are about 32 MB.
-- Verified against dsh **`0.1.0-rc.7`**, **`0.1.0-rc.8`**, **`0.1.2`** (alpha and rc.1) and **`0.1.5-alpha.1`**. dsh is in developer preview — check this line before assuming a newer dsh works. The browser authentication dsh introduced in 0.1.2-alpha is handled entirely on the machine side; the phone app needs no update for it.
+- Verified against dsh **`0.1.0-rc.7`**, **`0.1.0-rc.8`**, **`0.1.2`** (alpha and rc.1), **`0.1.5-alpha.1`** and **`0.1.5-rc.2`**. dsh is in developer preview — check this line before assuming a newer dsh works. The browser authentication dsh introduced in 0.1.2-alpha is handled entirely on the machine side; the phone app needs no update for it.
 
 ## What has been verified
 

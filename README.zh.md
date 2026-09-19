@@ -17,7 +17,7 @@
   <a href="../../releases"><img src="https://img.shields.io/github/downloads/zexadev/dsh-tether/total?style=flat&label=downloads&color=4D6BFE" alt="下载量"></a>
   <a href="../../stargazers"><img src="https://img.shields.io/github/stars/zexadev/dsh-tether?style=flat&label=%E2%98%85&color=08C" alt="Stars"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2EA44F?style=flat" alt="MIT"></a>
-  <img src="https://img.shields.io/badge/dsh-0.1.0--rc.7%20%7C%20rc.8%20%7C%200.1.2%20%7C%200.1.5--alpha-4D6BFE?style=flat" alt="dsh 0.1.0-rc.7 | rc.8 | 0.1.2 | 0.1.5-alpha">
+  <img src="https://img.shields.io/badge/dsh-0.1.0--rc.7%20%7C%20rc.8%20%7C%200.1.2%20%7C%200.1.5-4D6BFE?style=flat" alt="dsh 0.1.0-rc.7 | rc.8 | 0.1.2 | 0.1.5">
   <img src="https://img.shields.io/badge/Android-4493F8?style=flat" alt="Android">
   <img src="https://img.shields.io/badge/iOS-%E6%B5%8B%E8%AF%95%E7%89%88-8E8E93?style=flat" alt="iOS 测试版">
   <a href="https://www.dsh.so/artifact/dsh-tether"><img src="https://www.dsh.so/badge/dsh-tether.svg" alt="dsh.so 安全扫描"></a>
@@ -87,10 +87,10 @@ dsh plugin --profile web add .
 
 打开 App → 顶栏「主机」→ **在本机运行**。第一次要先解压运行时(实测约 9 秒),之后每次约 2 秒出现 dsh 的界面;在设置里填上 API Key 就能对话。
 
-- **装完即用**:不装 Termux、不开终端、不敲命令、不要 root。Node 24 与 dsh `0.1.2-rc.1` 的完整依赖树打在 APK 里,首次启动离线解压;之后只有调用模型 API 才需要网络。
+- **装完即用**:不装 Termux、不开终端、不敲命令、不要 root。Node 24 与 dsh `0.1.5-rc.2` 的完整依赖树打在 APK 里,首次启动离线解压;之后只有调用模型 API 才需要网络。
 - **没有配对**:dsh 就在这台手机上,没有远端。会话、设置、工作区只存在手机里,和连电脑时看到的完全是两套,来回切换互不影响。
 - **常驻**:运行期间有一条常驻通知(前台服务),退后台、锁屏不会被系统收掉;进程真被杀了,下次打开 App 自动重起,会话已落盘不丢。
-- **版本随 App 走**:内置的 dsh 随 App 升级一起升,当前内置 `0.1.2-rc.1`。
+- **版本随 App 走**:内置的 dsh 随 App 升级一起升,当前内置 `0.1.5-rc.2`。
 - 只有 `arm64` 的 APK 带本地模式;iOS 的沙箱不允许子进程,iOS 版没有这个入口。
 - 手机上没有 bash 和完整的 coreutils,依赖 shell 的工具用不全;对话、文件读写不受影响。
 
@@ -136,7 +136,7 @@ dsh plugin --profile web add .
 - App 打开时才连接,不在后台常驻——Android 的 doze 也留不住它。
 - 手机上的界面是 DSH 自己的,窄屏适配靠注入的最小样式完成;dsh 改版式时可能需要跟进。
 - 本地模式只有 `arm64` 包有,iOS 没有;手机上没有 bash 与完整 coreutils,依赖 shell 的工具用不全。arm64 包因内置运行时约 71 MB,其余包约 32 MB。
-- 已针对 dsh **`0.1.0-rc.7`**、**`0.1.0-rc.8`**、**`0.1.2`**(alpha 与 rc.1)与 **`0.1.5-alpha.1`** 验证。dsh 处于 developer preview,换更新的 dsh 之前先看这一行。dsh 0.1.2-alpha 引入的浏览器认证完全在电脑侧处理,手机 App 无需更新。
+- 已针对 dsh **`0.1.0-rc.7`**、**`0.1.0-rc.8`**、**`0.1.2`**(alpha 与 rc.1)、**`0.1.5-alpha.1`** 与 **`0.1.5-rc.2`** 验证。dsh 处于 developer preview,换更新的 dsh 之前先看这一行。dsh 0.1.2-alpha 引入的浏览器认证完全在电脑侧处理,手机 App 无需更新。
 
 ## 验证过什么
 
