@@ -2,6 +2,7 @@
 //! 协议:一连接一条控制 bi 流,JSON-lines;首行 Hello(已配对)或 Pair(配对)。
 
 pub mod i18n;
+use i18n::t;
 
 use std::io::Write as _;
 use std::path::Path;
@@ -44,7 +45,7 @@ fn restrict(path: &Path, mode: u32) -> Result<()> {
     use std::os::unix::fs::PermissionsExt;
     let perms = std::fs::Permissions::from_mode(mode);
     std::fs::set_permissions(path, perms)
-        .with_context(|| format!("收紧权限失败: {}", path.display()))
+        .with_context(|| format!("{}{}", t("收紧权限失败: ", "cannot tighten the permissions of "), path.display()))
 }
 #[cfg(not(unix))]
 fn restrict(_path: &Path, _mode: u32) -> Result<()> {
@@ -54,7 +55,7 @@ fn restrict(_path: &Path, _mode: u32) -> Result<()> {
 /// 建一个仅属主可进入的目录。
 fn create_private_dir(dir: &Path) -> Result<()> {
     std::fs::create_dir_all(dir)
-        .with_context(|| format!("创建目录失败: {}", dir.display()))?;
+        .with_context(|| format!("{}{}", t("创建目录失败: ", "cannot create the directory "), dir.display()))?;
     restrict(dir, 0o700)
 }
 
@@ -92,7 +93,7 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     }
     let mut file = opts
         .open(&tmp)
-        .with_context(|| format!("写入失败: {}", tmp.display()))?;
+        .with_context(|| format!("{}{}", t("写入失败: ", "cannot write "), tmp.display()))?;
     let written = file
         .write_all(bytes)
         // 落盘后再 rename,否则崩溃时可能 rename 了一个内容还没落地的文件
@@ -100,12 +101,12 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     drop(file);
     if let Err(e) = written {
         std::fs::remove_file(&tmp).ok();
-        return Err(e).with_context(|| format!("写入失败: {}", tmp.display()));
+        return Err(e).with_context(|| format!("{}{}", t("写入失败: ", "cannot write "), tmp.display()));
     }
 
     if let Err(e) = std::fs::rename(&tmp, path) {
         std::fs::remove_file(&tmp).ok();
-        return Err(e).with_context(|| format!("替换失败: {}", path.display()));
+        return Err(e).with_context(|| format!("{}{}", t("替换失败: ", "cannot replace "), path.display()));
     }
     restrict(path, 0o600)
 }
@@ -115,7 +116,7 @@ pub fn load_or_create_secret(path: &Path) -> Result<SecretKey> {
         let arr: [u8; 32] = bytes
             .as_slice()
             .try_into()
-            .with_context(|| format!("身份密钥文件损坏(长度不是 32 字节): {}", path.display()))?;
+            .with_context(|| format!("{}{}", t("身份密钥文件损坏(长度不是 32 字节): ", "the identity key file is damaged (not 32 bytes): "), path.display()))?;
         // 旧版本以 0o644 写下的密钥仍在用户磁盘上;每次加载顺手收紧,
         // 否则升级了也修不好已经泄露面的那些机器。
         restrict(path, 0o600)?;
@@ -123,7 +124,7 @@ pub fn load_or_create_secret(path: &Path) -> Result<SecretKey> {
     }
     let key = SecretKey::generate();
     write_private(path, &key.to_bytes())
-        .with_context(|| format!("保存身份密钥失败: {}", path.display()))?;
+        .with_context(|| format!("{}{}", t("保存身份密钥失败: ", "cannot save the identity key to "), path.display()))?;
     Ok(key)
 }
 
@@ -133,17 +134,17 @@ pub async fn read_line_bounded(recv: &mut RecvStream, max: usize) -> Result<Stri
     let mut byte = [0u8; 1];
     loop {
         let Some(n) = recv.read(&mut byte).await? else {
-            bail!("对端在行结束前关闭了流");
+            bail!("{}", t("对端在行结束前关闭了流", "the other side closed the stream mid-line"));
         };
         if n == 0 {
             continue;
         }
         if byte[0] == b'\n' {
-            return Ok(String::from_utf8(buf).context("控制流不是 UTF-8")?);
+            return Ok(String::from_utf8(buf).context(t("控制流不是 UTF-8", "the control stream is not UTF-8"))?);
         }
         buf.push(byte[0]);
         if buf.len() > max {
-            bail!("控制流单行超限({max} 字节)");
+            bail!("{}{max}{}", t("控制流单行超限(", "a control-stream line is over the limit ("), t(" 字节)", " bytes)"));
         }
     }
 }
@@ -249,14 +250,14 @@ pub async fn read_request_head<R: AsyncRead + Unpin>(recv: &mut R) -> Result<Str
     while !head.ends_with(b"\r\n\r\n") {
         // tokio 语义:读到 0 字节即对端关闭
         if recv.read(&mut byte).await? == 0 {
-            bail!("对端在请求头结束前关闭了流");
+            bail!("{}", t("对端在请求头结束前关闭了流", "the other side closed the stream before the request head ended"));
         }
         head.push(byte[0]);
         if head.len() > MAX_HEAD {
-            bail!("请求头超限({MAX_HEAD} 字节)");
+            bail!("{}{MAX_HEAD}{}", t("请求头超限(", "the request head is over the limit ("), t(" 字节)", " bytes)"));
         }
     }
-    String::from_utf8(head).context("请求头不是 UTF-8")
+    String::from_utf8(head).context(t("请求头不是 UTF-8", "the request head is not UTF-8"))
 }
 
 /// 改写一个请求头:Host/Origin 指到 dsh 真实 authority、注入认证 cookie、
