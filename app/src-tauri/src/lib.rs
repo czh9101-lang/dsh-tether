@@ -184,7 +184,7 @@ async fn run_connection_inner(
 
     let writer = async {
         while let Some(msg) = rx.recv().await {
-            let line = serde_json::to_string(&msg).expect("Wire 可序列化");
+            let line = serde_json::to_string(&msg).expect("Wire is serializable");
             if write_line(&mut send, &line).await.is_err() {
                 break;
             }
@@ -241,7 +241,7 @@ async fn start_proxy(app: AppHandle, conn: iroh::endpoint::Connection) -> Result
             let conn = conn.clone();
             tauri::async_runtime::spawn(async move {
                 let Ok((mut send, recv)) = conn.open_bi().await else { return };
-                let line = serde_json::to_string(&Wire::Proxy).expect("Wire 可序列化");
+                let line = serde_json::to_string(&Wire::Proxy).expect("Wire is serializable");
                 if write_line(&mut send, &line).await.is_err() {
                     return;
                 }
@@ -457,5 +457,5 @@ pub fn run() {
             local_log
         ])
         .run(tauri::generate_context!())
-        .expect("tauri 启动失败");
+        .expect("tauri failed to start");
 }

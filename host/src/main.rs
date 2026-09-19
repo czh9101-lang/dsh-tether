@@ -318,7 +318,7 @@ fn new_pairing_window() -> PairingWindow {
 
 fn emit(msg: &PluginOut) {
     // stdout 是插件协议通道;序列化失败属编程错误,直接崩比静默丢事件好
-    println!("{}", serde_json::to_string(msg).expect("PluginOut 可序列化"));
+    println!("{}", serde_json::to_string(msg).expect("PluginOut is serializable"));
 }
 
 /// Termux 里没有 JVM:iroh 默认解析器在 android 目标上经 JNI 读系统 DNS,
@@ -403,11 +403,11 @@ async fn stdin_loop(state: Arc<Mutex<HostState>>) {
         };
         match msg {
             PluginIn::Approval { id, tool_name, reason } => {
-                let wire = serde_json::to_string(&Wire::Approval { id, tool_name, reason }).expect("Wire 可序列化");
+                let wire = serde_json::to_string(&Wire::Approval { id, tool_name, reason }).expect("Wire is serializable");
                 broadcast(&state, wire).await;
             }
             PluginIn::ApprovalCancel { id } => {
-                let wire = serde_json::to_string(&Wire::ApprovalCancel { id }).expect("Wire 可序列化");
+                let wire = serde_json::to_string(&Wire::ApprovalCancel { id }).expect("Wire is serializable");
                 broadcast(&state, wire).await;
             }
             PluginIn::PairingBegin => {
@@ -606,7 +606,7 @@ async fn handle_phone(
                 eprintln!("[host] {}", t("未配置 --proxy-target,拒绝代理流", "no --proxy-target configured; refusing the proxy stream"));
                 continue;
             };
-            let permit = permits.clone().acquire_owned().await.expect("semaphore 不会关闭");
+            let permit = permits.clone().acquire_owned().await.expect("the semaphore is never closed");
             let auth_state = proxy_state.clone();
             tokio::spawn(async move {
                 let _permit = permit;
@@ -708,7 +708,7 @@ async fn phone_sim_main(
                 let conn = pconn.clone();
                 tokio::spawn(async move {
                     let Ok((mut psend, precv)) = conn.open_bi().await else { return };
-                    if write_line(&mut psend, &serde_json::to_string(&Wire::Proxy).expect("Wire 可序列化")).await.is_err() {
+                    if write_line(&mut psend, &serde_json::to_string(&Wire::Proxy).expect("Wire is serializable")).await.is_err() {
                         return;
                     }
                     let mut stream = tokio::io::join(precv, psend);
