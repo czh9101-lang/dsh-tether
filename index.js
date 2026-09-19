@@ -427,7 +427,9 @@ function injectNarrowScreenCss(html) {
     grid-template-columns: 56px minmax(0, 1fr) 0px !important;
   }
   [class*="_frame"] > [class*="centerCol"] { grid-column: 2 !important; }
-  [class*="_frame"] > [class*="detailsCol"] { grid-column: 3 !important; }
+  /* 右列 dsh 0.1.5 起从 detailsCol 改名 rightbarCol,两个名字都钉住 */
+  [class*="_frame"] > [class*="detailsCol"],
+  [class*="_frame"] > [class*="rightbarCol"] { grid-column: 3 !important; }
   [class*="_frame"] > [class*="sidebarCol"] {
     position: absolute !important;
     top: 0;
