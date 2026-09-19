@@ -19,7 +19,7 @@ use iroh::{Endpoint, EndpointId};
 use rand::Rng;
 use tether_core::i18n::t;
 use tether_core::{
-    ALPN, load_or_create_secret, MAX_LINE, MAX_UNPAIRED_LINE, ProxyAuth, read_line_bounded, read_request_head, rewrite_request_head, Wire, write_line, write_private,
+    ALPN, pair_fail_text, PAIR_BAD_CODE, PAIR_EXPIRED, PAIR_NO_WINDOW, PAIR_TOO_MANY_ATTEMPTS, load_or_create_secret, MAX_LINE, MAX_UNPAIRED_LINE, ProxyAuth, read_line_bounded, read_request_head, rewrite_request_head, Wire, write_line, write_private,
 };
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, BufReader};
@@ -216,6 +216,7 @@ enum PluginOut {
     PairingClosed { reason: String },
     PairingDone { peer: String, name: String },
     PeerConnected { peer: String, name: String },
+    /// reason 是 tether-core 里的配对失败原因码,插件按 dsh 那侧的语言渲染
     /// 连接路径:direct=NAT 打洞直连 / relay=经中转
     PeerPath { peer: String, kind: String, remote: String },
     PeerDisconnected { peer: String },
@@ -490,12 +491,12 @@ async fn handle_phone(
         (false, Wire::Pair { code, name }) => {
             let mut s = state.lock().await;
             let verdict = match &mut s.pairing {
-                None => Err("当前没有开放的配对窗口"),
-                Some(w) if tokio::time::Instant::now() > w.deadline => Err("配对窗口已过期"),
-                Some(w) if w.attempts >= PAIRING_MAX_ATTEMPTS => Err("尝试次数超限"),
+                None => Err(PAIR_NO_WINDOW),
+                Some(w) if tokio::time::Instant::now() > w.deadline => Err(PAIR_EXPIRED),
+                Some(w) if w.attempts >= PAIRING_MAX_ATTEMPTS => Err(PAIR_TOO_MANY_ATTEMPTS),
                 Some(w) => {
                     w.attempts += 1;
-                    if w.code == code { Ok(()) } else { Err("配对码不正确") }
+                    if w.code == code { Ok(()) } else { Err(PAIR_BAD_CODE) }
                 }
             };
             match verdict {
@@ -517,7 +518,7 @@ async fn handle_phone(
                     // 3 次错完关窗:6 位码空间 1e6,窗口内只许猜 3 次
                     if s.pairing.as_ref().is_some_and(|w| w.attempts >= PAIRING_MAX_ATTEMPTS) {
                         s.pairing = None;
-                        emit(&PluginOut::PairingClosed { reason: "尝试次数超限".into() });
+                        emit(&PluginOut::PairingClosed { reason: PAIR_TOO_MANY_ATTEMPTS.into() });
                     }
                     drop(s);
                     write_line(&mut send, &serde_json::to_string(&Wire::PairFail { reason: reason.into() })?).await?;
@@ -685,7 +686,7 @@ async fn phone_sim_main(
         let resp = read_line_bounded(&mut recv, MAX_LINE).await?;
         match serde_json::from_str::<Wire>(&resp)? {
             Wire::PairOk => eprintln!("[phone-sim] {}", t("配对成功", "paired")),
-            Wire::PairFail { reason } => bail!("{}{reason}", t("配对失败: ", "pairing failed: ")),
+            Wire::PairFail { reason } => bail!("{}{}", t("配对失败: ", "pairing failed: "), pair_fail_text(&reason)),
             _ => bail!("{}{resp}", t("配对应答不符合协议: ", "the pairing reply does not follow the protocol: ")),
         }
     }

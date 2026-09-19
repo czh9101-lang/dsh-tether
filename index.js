@@ -26,6 +26,16 @@ const terminalZh = /^zh/i.test(
 )
 /** 终端文案 */
 const tt = (zh, en) => (terminalZh ? zh : en)
+/**
+ * sidecar 发的是配对失败原因码(tether-core 定义),不是人话——同一条消息手机上也要显示,
+ * 只能各端各译。认不出的原样带出:0.1.16 及更早的 sidecar 直接发中文句子。
+ */
+const pairFailText = (code) => ({
+  'no-window': tt('主机上没有开着的配对窗口', 'no pairing window is open'),
+  expired: tt('配对窗口已过期', 'the pairing window expired'),
+  'too-many-attempts': tt('配对码试错次数超限', 'too many wrong codes'),
+  'bad-code': tt('配对码不正确', 'wrong pairing code'),
+}[code] ?? code)
 /** 路由文案 */
 const tr = (req, zh, en) => {
   const declared = req.headers['x-dsh-tether-lang'] || req.headers['accept-language'] || ''
@@ -215,7 +225,7 @@ function apply(ctx, config = {}) {
         break
       }
       case 'pairing-closed':
-        console.log(`[tether] ${tt('配对窗口已关闭: ', 'the pairing window closed: ')}${msg.reason}`)
+        console.log(`[tether] ${tt('配对窗口已关闭: ', 'the pairing window closed: ')}${pairFailText(msg.reason)}`)
         break
       case 'pairing-done':
         console.log(`[tether] ${tt('配对成功: ', 'paired: ')}${msg.name}(${msg.peer.slice(0, 16)}…)`)

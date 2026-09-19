@@ -13,7 +13,8 @@ use tether_core::i18n::t;
 use iroh::endpoint::presets;
 use iroh::{Endpoint, EndpointId};
 use tether_core::{
-    load_or_create_secret, read_line_bounded, write_line, write_private, Wire, ALPN, MAX_LINE,
+    load_or_create_secret, pair_fail_text, read_line_bounded, write_line, write_private, Wire, ALPN,
+    MAX_LINE,
 };
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -162,7 +163,7 @@ async fn run_connection_inner(
                 book.current = Some(id);
                 save_book(app, &book)?;
             }
-            Wire::PairFail { reason } => bail!("{}{reason}", t("配对失败: ", "pairing failed: ")),
+            Wire::PairFail { reason } => bail!("{}{}", t("配对失败: ", "pairing failed: "), pair_fail_text(&reason)),
             _ => bail!("{}", t("配对应答不符合协议", "the pairing reply does not follow the protocol")),
         }
     }

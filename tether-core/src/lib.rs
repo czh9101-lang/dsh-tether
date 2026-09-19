@@ -30,12 +30,31 @@ pub enum Wire {
     Proxy,
     // host → 手机(配对应答)
     PairOk,
+    /// reason 是下面那几个原因码,不是人话:这句要显示在手机上,得由手机按自己的语言渲染
     PairFail { reason: String },
     // host → 手机
     Approval { id: String, tool_name: String, reason: String },
     ApprovalCancel { id: String },
     // 手机 → host
     Decision { id: String, outcome: String },
+}
+
+/// 配对失败的原因码。线上只传码,两侧各自渲染。
+pub const PAIR_NO_WINDOW: &str = "no-window";
+pub const PAIR_EXPIRED: &str = "expired";
+pub const PAIR_TOO_MANY_ATTEMPTS: &str = "too-many-attempts";
+pub const PAIR_BAD_CODE: &str = "bad-code";
+
+/// 原因码译成当前语言的人话。认不出的码原样带出:0.1.16 及更早的 host 发的就是中文句子,
+/// 那种情况下把它原样显示出来,总好过吞掉或者显示一个码。
+pub fn pair_fail_text(code: &str) -> String {
+    match code {
+        PAIR_NO_WINDOW => t("主机上没有开着的配对窗口", "the computer has no pairing window open").to_string(),
+        PAIR_EXPIRED => t("配对窗口已过期", "the pairing window has expired").to_string(),
+        PAIR_TOO_MANY_ATTEMPTS => t("配对码试错次数超限,窗口已关", "too many wrong codes; the window is closed").to_string(),
+        PAIR_BAD_CODE => t("配对码不正确", "that pairing code is wrong").to_string(),
+        other => other.to_string(),
+    }
 }
 
 /// 把既有文件/目录的权限收到仅属主可读写(目录再加可进入)。
