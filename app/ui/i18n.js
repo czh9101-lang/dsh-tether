@@ -124,4 +124,5 @@ function applyStatic() {
 }
 
 window.t = t
-window.applyStaticI18n = applyStatic
+// 自己填,不等 main.js:静态文案不该因为 main.js 里任何一行出错就整页空着
+applyStatic()

@@ -8,9 +8,6 @@ const PROJECT_URL = 'https://github.com/zexadev/dsh-tether'
 const el = (id) => document.getElementById(id)
 const views = { hosts: el('view-hosts'), pair: el('view-pair'), status: el('view-status') }
 
-// 静态文案在任何视图显示之前填好,否则先渲染出来的是空白节点
-applyStaticI18n()
-
 /** 连接已建立且 web UI 正在显示——决定「取消/返回」该退回哪里 */
 let live = false
 let book = { hosts: [], current: null }
