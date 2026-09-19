@@ -2,6 +2,18 @@
 
 本文件记录面向用户的变化。每个版本的这一节会原样作为该版本 Release 的说明。
 
+## 0.1.17
+
+### 修复
+
+- **sidecar 自己的 `--help` 还是中文**([#8](https://github.com/zexadev/dsh-tether/issues/8))。0.1.16 把界面和终端输出都做了英文,唯独 `tether-host --help` 和每个参数的说明漏了,手跑二进制的人只能对着中文猜参数。现在帮助文本也按语言出中英。
+- **Windows 和 macOS 上手跑 sidecar 恒出中文**。判定语言只认 `LC_ALL`/`LANG`,而这两个系统本来就不设这两个变量,英文用户于是必得中文。现在环境变量没有就问系统语言。
+- **配对失败的原因在手机上显示成中文**。原因是电脑侧直接把中文句子发给了手机——这句该由看到它的那一端来措辞。线上改成只传原因码,手机 App 和 dsh 界面各按自己那侧的语言显示。另有几处写死的中文一并补齐(phone-sim 的代理就绪、本地代理监听失败、前台服务日志、移除设备失败)。
+
+### English
+
+This release finishes what 0.1.16 started: `tether-host --help` and all option descriptions are now English on an English machine, the language is detected from the system when `LC_ALL`/`LANG` are unset (which is the normal case on Windows and macOS), and a failed pairing is now worded by whichever side displays it, so the phone no longer shows a Chinese reason. Nothing a user can see is Chinese-only any more; if you find something, please open an issue.
+
 ## 0.1.16
 
 ### 新增
