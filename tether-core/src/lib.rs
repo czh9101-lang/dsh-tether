@@ -176,7 +176,7 @@ pub async fn write_line(send: &mut SendStream, line: &str) -> Result<()> {
 
 // 权限位只在 unix 上存在;Windows 下这些断言无意义,整块不编译。
 #[cfg(all(test, unix))]
-mod tests {
+mod private_file_tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt as _;
 
